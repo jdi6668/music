@@ -151,6 +151,26 @@ function detectBeat(dt) {
   return { beat, strength, energy, sustain };
 }
 
+// ---------- 频谱分析 (沉浸式特效数据源) ----------
+const audio = { bass: 0, mid: 0, treble: 0, level: 0 };
+let beatFlash = 0;        // 节拍暖闪
+let beatZoom = 0;         // 节拍轻微推镜
+function updateSpectrum(dt) {
+  if (!freqData) return;
+  const n = freqData.length;
+  const be = Math.floor(n * 0.06), me = Math.floor(n * 0.35);
+  let b = 0, m = 0, tr = 0;
+  for (let i = 0; i < be; i++) b += freqData[i];
+  for (let i = be; i < me; i++) m += freqData[i];
+  for (let i = me; i < n; i++) tr += freqData[i];
+  b /= (be * 255) || 1; m /= ((me - be) * 255) || 1; tr /= ((n - me) * 255) || 1;
+  const k = Math.min(1, dt * 12);
+  audio.bass   += (b  - audio.bass) * k;
+  audio.mid    += (m  - audio.mid) * k;
+  audio.treble += (tr - audio.treble) * k;
+  audio.level = audio.bass * 0.6 + audio.mid * 0.3 + audio.treble * 0.1;
+}
+
 // 落地音效 (合成短促 "叮/咚")
 function playStepSound(strength) {
   if (!audioCtx) return;
@@ -360,7 +380,31 @@ function drawBall() {
   }
   ctx.globalAlpha = 1;
 
-  const x = ball.x + camX, y = ball.y - cam.y, r = ball.r;
+  const x = ball.x + camX, y = ball.y - cam.y;
+  // 随低频与节拍脉动的视觉半径 (不影响物理)
+  const r = ball.r * (1 + audio.bass * 0.3 + beatFlash * 0.15);
+
+  // 环绕小球的实时频谱环
+  if (freqData) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const bars = 60;
+    for (let i = 0; i < bars; i++) {
+      const idx = Math.floor((i / bars) * freqData.length * 0.55);
+      const v = freqData[idx] / 255;
+      const ang = (i / bars) * Math.PI * 2 + bgT * 0.35;
+      const r0 = r + 6, r1 = r0 + 3 + v * 40;
+      const hue = (i / bars) * 130 + 30 + bgT * 20;
+      ctx.strokeStyle = `hsla(${hue},100%,70%,${0.12 + v * 0.55})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(ang) * r0, y + Math.sin(ang) * r0);
+      ctx.lineTo(x + Math.cos(ang) * r1, y + Math.sin(ang) * r1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // 压扁形变
   const sq = ball.squash;
   const sx = 1 + sq * 0.4, sy = 1 - sq * 0.4;
@@ -371,7 +415,7 @@ function drawBall() {
   g.addColorStop(0.3, '#ffe9a8');
   g.addColorStop(1, '#ff9ecb');
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = g; ctx.shadowColor = '#ffbf6a'; ctx.shadowBlur = 28; ctx.fill();
+  ctx.fillStyle = g; ctx.shadowColor = '#ffbf6a'; ctx.shadowBlur = 28 + audio.bass * 44 + beatFlash * 30; ctx.fill();
   ctx.shadowBlur = 0;
   // 高光
   ctx.beginPath(); ctx.arc(x - r*0.32, y - r*0.32, r*0.22, 0, Math.PI*2);
@@ -524,33 +568,82 @@ const bgMotes = [];
 function seedMotes() { bgMotes.length = 0; for (let i=0;i<80;i++) bgMotes.push(makeMote(Math.random()*H)); }
 function makeMote(y){ const d=Math.random(); return { x:Math.random()*W, y, r:0.6+d*2.2, v:6+d*22, a:0.05+d*0.2, ph:Math.random()*6.28, drift:(Math.random()-0.5)*0.6 }; }
 let bgT = 0;
-function drawBackground(dt, level) {
+function drawBackground(dt) {
   bgT += dt;
+  const bass = audio.bass, mid = audio.mid, treble = audio.treble;
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#1a1030');
   bg.addColorStop(0.4, '#2a1a4a');
   bg.addColorStop(0.75, '#14284a');
   bg.addColorStop(1, '#071322');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  // 随音乐律动的光晕
+
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  const pulse = 0.06 + level * 0.5;
-  const rg = ctx.createRadialGradient(W/2, H*0.4, 40, W/2, H*0.4, W*0.7);
-  rg.addColorStop(0, `rgba(180,140,255,${pulse})`);
-  rg.addColorStop(1, 'rgba(180,140,255,0)');
-  ctx.fillStyle = rg; ctx.fillRect(0,0,W,H);
+
+  // 反应式中心泛光 (低频驱动, 节拍推大)
+  const pulse = 0.05 + bass * 0.85 + beatFlash * 0.25;
+  const rad = W * (0.42 + bass * 0.35 + beatFlash * 0.1);
+  const rg = ctx.createRadialGradient(W/2, H*0.46, 30, W/2, H*0.46, rad);
+  rg.addColorStop(0, `rgba(200,150,255,${pulse})`);
+  rg.addColorStop(0.5, `rgba(255,140,200,${pulse*0.4})`);
+  rg.addColorStop(1, 'rgba(120,90,200,0)');
+  ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+
+  // 极光丝带 (中频驱动)
+  const auroraA = 0.04 + mid * 0.5;
+  for (let k = 0; k < 3; k++) {
+    const yBase = H * (0.22 + 0.22 * k);
+    const amp = 30 + mid * 150 + k * 20;
+    const hue = 260 - k * 40 + Math.sin(bgT * 0.3 + k) * 20;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 24) {
+      const y = yBase + Math.sin(x * 0.006 + bgT * (0.6 + k*0.2) + k) * amp;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `hsla(${hue},90%,70%,${auroraA})`;
+    ctx.lineWidth = 2 + mid * 10;
+    ctx.shadowColor = `hsla(${hue},90%,70%,0.8)`;
+    ctx.shadowBlur = 18 + mid * 30;
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  // 顶部光束 (高频驱动)
+  const rayA = 0.03 + treble * 0.22;
+  for (let i = 0; i < 5; i++) {
+    const cx = W * (0.12 + 0.19 * i) + Math.sin(bgT * 0.3 + i) * 60;
+    const w = 50 + i * 12 + treble * 40;
+    const grad = ctx.createLinearGradient(cx, 0, cx + w, H * 0.9);
+    grad.addColorStop(0, `rgba(180,210,255,${rayA})`);
+    grad.addColorStop(1, 'rgba(180,210,255,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx + w, 0);
+    ctx.lineTo(cx + w*2.2, H); ctx.lineTo(cx - w*1.2, H);
+    ctx.closePath(); ctx.fill();
+  }
   ctx.restore();
-  // 漂浮微粒
+
+  // 漂浮微粒 (音量越大上浮越快)
   if (!bgMotes.length) seedMotes();
+  const spd = 1 + audio.level * 2.5;
   for (const m of bgMotes) {
-    m.y -= m.v*dt; m.ph += dt; m.x += Math.sin(m.ph)*m.drift;
+    m.y -= m.v*dt*spd; m.ph += dt; m.x += Math.sin(m.ph)*m.drift;
     if (m.y < -4) Object.assign(m, makeMote(H+4));
-    ctx.globalAlpha = m.a;
+    ctx.globalAlpha = m.a * (0.6 + audio.level);
     ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
     ctx.fillStyle = '#e6d8ff'; ctx.fill();
   }
   ctx.globalAlpha = 1;
+}
+
+// 边缘暗角 (聚焦中心, 增强沉浸)
+function drawVignette() {
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.35, W/2, H/2, H*0.85);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(4,2,12,0.55)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 }
 
 // ---------- 状态 ----------
@@ -565,8 +658,16 @@ function loop(now) {
   state.lastFrame = now;
 
   // 能量分析: 用于背景律动 + 持续声滚动 (不再驱动柱子生成)
-  const { sustain, energy } = detectBeat(dt);
+  const { beat, strength, sustain, energy } = detectBeat(dt);
+  updateSpectrum(dt);
   state.level += (Math.min(1, energy / 12000) - state.level) * Math.min(1, dt*8);
+  // 节拍脉冲: 暖闪 + 轻微推镜
+  if (beat) {
+    beatFlash = Math.min(1, 0.4 + strength * 0.4);
+    beatZoom = Math.min(0.05, 0.025 + strength * 0.02);
+  }
+  beatFlash = Math.max(0, beatFlash - dt * 3.5);
+  beatZoom = Math.max(0, beatZoom - dt * 2.4);
   // 歌词驱动: 唱到一个字 -> 生成一根柱子 + 小球跳上去
   const nowT = audioEl.currentTime;
   while (nextNote < noteTimes.length && nowT >= noteTimes[nextNote].time) {
@@ -591,14 +692,24 @@ function loop(now) {
   updateFx(dt);
 
   ctx.clearRect(0,0,W,H);
-  drawBackground(dt, state.level);
+  drawBackground(dt);
 
   ctx.save();
   if (fx.shake > 0) ctx.translate((Math.random()-0.5)*fx.shake, (Math.random()-0.5)*fx.shake);
+  if (beatZoom > 0) { ctx.translate(W/2, H/2); ctx.scale(1+beatZoom, 1+beatZoom); ctx.translate(-W/2, -H/2); }
   drawStairs();
   drawFx();
   drawBall();
   ctx.restore();
+
+  // 节拍暖闪 (整屏, 克制不刺眼)
+  if (beatFlash > 0) {
+    ctx.globalAlpha = beatFlash * 0.12;
+    ctx.fillStyle = '#ffe6c8';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+  drawVignette();
 
   document.getElementById('time-value').textContent = fmtTime(audioEl.currentTime);
   requestAnimationFrame(loop);
@@ -614,6 +725,8 @@ async function startGame() {
   document.getElementById('start-overlay').classList.add('hidden');
   document.getElementById('end-overlay').classList.add('hidden');
   energyHistory = []; beatCooldown = 0;
+  audio.bass = audio.mid = audio.treble = audio.level = 0;
+  beatFlash = 0; beatZoom = 0;
   particles.length = 0; rings.length = 0; fx.shake = 0;
   Object.assign(state, { running:true, steps:0, level:0 });
   resetStairs();
