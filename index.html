@@ -269,6 +269,8 @@ function addStair(isFirst) {
     color: STAIR_COLORS[stairs.length % STAIR_COLORS.length],
     born: 0,                        // 生长动画进度
     ch: '',                         // 该柱对应的歌词字
+    appear: 0,                      // 文字弹出进度 (1->0, 大变小)
+    flash: 0,                       // 落地高亮 (1->0)
   };
   stairs.push(s);
   return s;
@@ -317,6 +319,8 @@ function updateBall(dt, sustain) {
       p = 1; ball.jumping = false;
       ball.squash = 1;              // 落地压扁反馈
       ball.rollVel = 0;             // 落地后从平台中心重新起步
+      const ls = stairs[ball.targetIdx];
+      if (ls) ls.flash = 1;         // 落地柱子高亮一瞬
       playStepSound(0.8);
       spawnLandFx(ball.toX, ball.toY + ball.r);
     }
@@ -462,25 +466,41 @@ function drawStairs() {
     ctx.lineTo(sx + s.w, topY);
     ctx.closePath(); ctx.fill();
     // 台阶顶面
+    const fl = s.flash;                // 落地高亮系数
     const gh = 12 * grow;
     const g = ctx.createLinearGradient(sx, topY - gh, sx, topY + 6);
-    g.addColorStop(0, shade(s.color, 0.25));
-    g.addColorStop(1, s.color);
+    g.addColorStop(0, shade(s.color, 0.25 + fl * 0.6));
+    g.addColorStop(1, shade(s.color, fl * 0.4));
     ctx.fillStyle = g;
     roundRect(sx, topY - 8 * grow, s.w, 12 * grow + 2, 5);
-    ctx.shadowColor = s.color; ctx.shadowBlur = 16 * grow; ctx.fill();
+    ctx.shadowColor = fl > 0 ? '#ffffff' : s.color;
+    ctx.shadowBlur = 16 * grow + fl * 34; ctx.fill();
     ctx.shadowBlur = 0;
+    // 落地瞬间的白色高亮覆盖 + 冲击环
+    if (fl > 0) {
+      ctx.globalAlpha = fl * 0.7;
+      ctx.fillStyle = '#ffffff';
+      roundRect(sx, topY - 8 * grow, s.w, 12 * grow + 2, 5); ctx.fill();
+      ctx.globalAlpha = fl * 0.9;
+      ctx.strokeStyle = '#fff6e6'; ctx.lineWidth = 2 + fl * 3;
+      ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 20 * fl;
+      roundRect(sx - fl*10, topY - 8*grow - fl*10, s.w + fl*20, 12*grow + 2 + fl*20, 8); ctx.stroke();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
     // 顶面高光线
     ctx.strokeStyle = 'rgba(255,255,255,' + (0.5*grow) + ')';
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(sx+4, topY - 6*grow); ctx.lineTo(sx+s.w-4, topY - 6*grow); ctx.stroke();
-    // 歌词字 (浮在柱顶上方)
+    // 歌词字 (浮在柱顶上方, 出现时从大变小)
     if (s.ch) {
+      const pop = s.appear;                       // 1->0
+      const tscale = 1 + pop * 1.6;               // 初始约 2.6x, 收缩到 1x
+      const fsize = 26 * tscale;
       ctx.globalAlpha = grow;
-      ctx.font = '700 26px "Microsoft YaHei", sans-serif';
+      ctx.font = '700 ' + fsize.toFixed(1) + 'px "Microsoft YaHei", sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const cx = sx + s.w / 2, cy = topY - (ball.r * 2 + 18);
-      ctx.shadowColor = s.color; ctx.shadowBlur = 14 * grow;
+      ctx.shadowColor = s.color; ctx.shadowBlur = 14 * grow + pop * 20;
       ctx.fillStyle = '#fff6e6';
       ctx.fillText(s.ch, cx, cy);
       ctx.shadowBlur = 0; ctx.globalAlpha = 1;
@@ -566,12 +586,17 @@ function loop(now) {
     const s = addStair(false);
     s.color = STAIR_COLORS[state.steps % STAIR_COLORS.length];
     s.ch = n.ch;
+    s.appear = 1;                   // 触发文字"大变小"弹出
     state.steps++;
     jumpToStair(stairs.length - 1);
     updateHUD();
   }
-  // 台阶生长动画
-  for (const s of stairs) if (s.born < 1) s.born += dt * 6;
+  // 台阶生长动画 + 文字弹出 / 高亮衰减
+  for (const s of stairs) {
+    if (s.born < 1) s.born += dt * 6;
+    if (s.appear > 0) s.appear = Math.max(0, s.appear - dt * 2.6);
+    if (s.flash > 0) s.flash = Math.max(0, s.flash - dt * 3);
+  }
 
   updateBall(dt, sustain);
   updateCamera(dt);
