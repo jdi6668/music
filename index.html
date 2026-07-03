@@ -55,16 +55,8 @@
   <canvas id="game"></canvas>
 
   <div id="hud">
-    <div class="hud-box">
-      <div class="hud-label">STEPS 台阶</div>
-      <div class="hud-value" id="steps-value">0</div>
-    </div>
-    <div class="hud-box" style="text-align:center">
-      <div class="hud-label">HEIGHT 高度</div>
-      <div class="hud-value" id="height-value">0m</div>
-    </div>
-    <div class="hud-box" style="text-align:right">
-      <div class="hud-label">TIME 进度</div>
+    <div class="hud-box" style="margin-left:auto; text-align:right">
+      <div class="hud-label">TIME 时光</div>
       <div class="hud-value" id="time-value">0:00</div>
     </div>
   </div>
@@ -564,11 +556,7 @@ function drawBackground(dt, level) {
 // ---------- 状态 ----------
 const state = { running:false, lastFrame:0, steps:0, level:0 };
 
-function updateHUD() {
-  document.getElementById('steps-value').textContent = state.steps;
-  const top = stairs.length ? stairs[stairs.length-1].iy : 0;
-  document.getElementById('height-value').textContent = Math.round(top * STEP_H / 20) + 'm';
-}
+function updateHUD() {}
 
 // ---------- 主循环 ----------
 function loop(now) {
