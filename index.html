@@ -181,6 +181,59 @@ const STEP_W = 96;         // 每级台阶水平跨度 (世界像素)
 const STEP_H = 62;         // 每级台阶垂直高度
 const STAIR_COLORS = ['#ffd67a','#ff9ecb','#a98bff','#7fd6ff','#8affc1'];
 
+// ---------- 歌词逐字时间轴 (驱动柱子生成) ----------
+let noteTimes = [];        // [{ time, ch }] 每个字一个时间点
+let nextNote = 0;          // 下一个待生成的字索引
+const LRC_SKIP = ['词：','曲：','编曲','制作人','制作','和声','混音','母带','监制',' - ','：Jay','演唱'];
+
+function parseLRC(text) {
+  const lines = text.split(/\r?\n/);
+  const timeTag = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
+  const raw = [];   // [ [秒, 文本] ]
+  for (const line of lines) {
+    const times = []; let m; timeTag.lastIndex = 0;
+    while ((m = timeTag.exec(line)) !== null) {
+      const min = parseInt(m[1],10), sec = parseInt(m[2],10);
+      const frac = m[3] ? parseInt(m[3].padEnd(3,'0'),10)/1000 : 0;
+      times.push(min*60 + sec + frac);
+    }
+    if (!times.length) continue;
+    const content = line.replace(timeTag,'').trim();
+    if (!content) continue;
+    if (LRC_SKIP.some(k => content.includes(k))) continue;
+    for (const t of times) raw.push([t, content]);
+  }
+  raw.sort((a,b) => a[0]-b[0]);
+  return raw;
+}
+
+// 把每句歌词按字数在句子时长内均匀分布 -> 逐字时间点
+function buildNotes(raw) {
+  noteTimes.length = 0; nextNote = 0;
+  const punct = /[，。！？、,.!?；;：:\s（）()「」“”"']/;
+  for (let i = 0; i < raw.length; i++) {
+    const t = raw[i][0], text = raw[i][1];
+    const nextT = (i+1 < raw.length) ? raw[i+1][0] : t + 3;
+    const chars = Array.from(text).filter(c => !punct.test(c));
+    if (!chars.length) continue;
+    const dur = Math.max(0.4, Math.min(nextT - t, chars.length * 0.5));
+    const step = dur / chars.length;
+    chars.forEach((ch, j) => noteTimes.push({ time: t + j*step, ch }));
+  }
+  noteTimes.sort((a,b) => a.time - b.time);
+}
+
+async function loadLyrics() {
+  try {
+    const res = await fetch('heisemaoyi.lrc');
+    const text = await res.text();
+    buildNotes(parseLRC(text));
+  } catch (e) {
+    console.warn('歌词载入失败', e);
+    noteTimes = []; nextNote = 0;
+  }
+}
+
 // ---------- 阶梯 ----------
 const stairs = [];         // {ix, iy, x, y, w, h, color, born, dir}
 let stairDir = 1;          // 当前生成方向 (1向右, -1向左), 到达边界翻转形成 Z 字
@@ -215,6 +268,7 @@ function addStair(isFirst) {
     h: STEP_H,
     color: STAIR_COLORS[stairs.length % STAIR_COLORS.length],
     born: 0,                        // 生长动画进度
+    ch: '',                         // 该柱对应的歌词字
   };
   stairs.push(s);
   return s;
@@ -420,6 +474,17 @@ function drawStairs() {
     ctx.strokeStyle = 'rgba(255,255,255,' + (0.5*grow) + ')';
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(sx+4, topY - 6*grow); ctx.lineTo(sx+s.w-4, topY - 6*grow); ctx.stroke();
+    // 歌词字 (浮在柱顶上方)
+    if (s.ch) {
+      ctx.globalAlpha = grow;
+      ctx.font = '700 26px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const cx = sx + s.w / 2, cy = topY - 26;
+      ctx.shadowColor = s.color; ctx.shadowBlur = 14 * grow;
+      ctx.fillStyle = '#fff6e6';
+      ctx.fillText(s.ch, cx, cy);
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
   }
 }
 
@@ -491,12 +556,16 @@ function loop(now) {
   const dt = Math.min(0.05, (now - state.lastFrame)/1000) || 0;
   state.lastFrame = now;
 
-  // 节拍检测 -> 生成新台阶 + 命令小球起跳
-  const { beat, strength, energy, sustain } = detectBeat(dt);
+  // 能量分析: 用于背景律动 + 持续声滚动 (不再驱动柱子生成)
+  const { sustain, energy } = detectBeat(dt);
   state.level += (Math.min(1, energy / 12000) - state.level) * Math.min(1, dt*8);
-  if (beat) {
+  // 歌词驱动: 唱到一个字 -> 生成一根柱子 + 小球跳上去
+  const nowT = audioEl.currentTime;
+  while (nextNote < noteTimes.length && nowT >= noteTimes[nextNote].time) {
+    const n = noteTimes[nextNote++];
     const s = addStair(false);
     s.color = STAIR_COLORS[state.steps % STAIR_COLORS.length];
+    s.ch = n.ch;
     state.steps++;
     jumpToStair(stairs.length - 1);
     updateHUD();
@@ -527,6 +596,8 @@ function fmtTime(s){ const m=Math.floor(s/60), ss=Math.floor(s%60); return m+':'
 async function startGame() {
   if (!audioCtx) setupAudio();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
+  if (!noteTimes.length) await loadLyrics();
+  nextNote = 0;
   document.getElementById('start-overlay').classList.add('hidden');
   document.getElementById('end-overlay').classList.add('hidden');
   energyHistory = []; beatCooldown = 0;
