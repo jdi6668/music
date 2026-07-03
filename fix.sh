@@ -1,4 +1,5 @@
 #!/bin/sh
 
-git add .;git commit -m "$comment" ;
+git add .
+git commit -m fix
 # git push
