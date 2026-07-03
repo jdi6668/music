@@ -152,7 +152,11 @@ function detectBeat(dt) {
     strength = Math.min(1.6, energy / (avg + 1));
     beatCooldown = 0.24;             // 最短两拍间隔, 避免过密
   }
-  return { beat, strength, energy };
+  // 持续声音强度: 能量高于均值的连续程度 (驱动平台上滚动)
+  const sustain = energyHistory.length >= 12
+    ? Math.max(0, Math.min(1.5, energy / (avg + 1) - 1.02))
+    : 0;
+  return { beat, strength, energy, sustain };
 }
 
 // 落地音效 (合成短促 "叮/咚")
@@ -224,6 +228,8 @@ const ball = {
   jt: 0, jdur: 0.32,
   fromX: 0, fromY: 0, toX: 0, toY: 0,
   squash: 0,                        // 落地压扁
+  rollVel: 0,                       // 平台上滚动速度 (世界像素/秒)
+  spin: 0,                          // 自转角度 (滚动视觉)
   trail: [],
 };
 
@@ -232,6 +238,7 @@ function resetBall() {
   ball.x = s0.x; ball.y = s0.y - ball.r;
   ball.targetIdx = 0;
   ball.jumping = false; ball.jt = 0; ball.squash = 0;
+  ball.rollVel = 0; ball.spin = 0;
   ball.trail.length = 0;
 }
 
@@ -248,13 +255,14 @@ function jumpToStair(idx) {
   ball.targetIdx = idx;
 }
 
-function updateBall(dt) {
+function updateBall(dt, sustain) {
   if (ball.jumping) {
     ball.jt += dt;
     let p = ball.jt / ball.jdur;
     if (p >= 1) {
       p = 1; ball.jumping = false;
       ball.squash = 1;              // 落地压扁反馈
+      ball.rollVel = 0;             // 落地后从平台中心重新起步
       playStepSound(0.8);
       spawnLandFx(ball.toX, ball.toY + ball.r);
     }
@@ -262,6 +270,24 @@ function updateBall(dt) {
     const arc = Math.sin(p * Math.PI) * (60 + Math.abs(ball.toX - ball.fromX) * 0.35);
     ball.x = ball.fromX + (ball.toX - ball.fromX) * p;
     ball.y = ball.fromY + (ball.toY - ball.fromY) * p - arc;
+    // 空中也自转
+    ball.spin += (ball.toX - ball.fromX >= 0 ? 1 : -1) * dt * 6;
+  } else {
+    // 停在平台上: 若有持续声音, 沿平台朝行进方向滚动一段
+    const s = stairs[ball.targetIdx];
+    if (s) {
+      const half = s.w * 0.5 - ball.r;
+      if (sustain > 0.12) {
+        ball.rollVel += stairDir * (70 + sustain * 300) * dt;
+      }
+      ball.rollVel *= Math.max(0, 1 - dt * 2.2);      // 摩擦衰减
+      ball.x += ball.rollVel * dt;
+      const minX = s.x - half, maxX = s.x + half;
+      if (ball.x < minX) { ball.x = minX; ball.rollVel *= -0.3; }
+      if (ball.x > maxX) { ball.x = maxX; ball.rollVel *= -0.3; }
+      ball.y = s.y - ball.r;                          // 锁定在平台顶面
+      ball.spin += (ball.rollVel / ball.r) * dt;      // 滚动自转
+    }
   }
   // 压扁恢复
   ball.squash += (0 - ball.squash) * Math.min(1, dt * 9);
@@ -279,12 +305,12 @@ function drawBall() {
     const rr = ball.r * (0.4 + i / ball.trail.length * 0.5);
     ctx.globalAlpha = a;
     ctx.beginPath();
-    ctx.arc(p.x, p.y - cam.y, rr, 0, Math.PI * 2);
+    ctx.arc(p.x + camX, p.y - cam.y, rr, 0, Math.PI * 2);
     ctx.fillStyle = '#ffd67a'; ctx.fill();
   }
   ctx.globalAlpha = 1;
 
-  const x = ball.x, y = ball.y - cam.y, r = ball.r;
+  const x = ball.x + camX, y = ball.y - cam.y, r = ball.r;
   // 压扁形变
   const sq = ball.squash;
   const sx = 1 + sq * 0.4, sy = 1 - sq * 0.4;
@@ -300,6 +326,11 @@ function drawBall() {
   // 高光
   ctx.beginPath(); ctx.arc(x - r*0.32, y - r*0.32, r*0.22, 0, Math.PI*2);
   ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+  // 旋转标记 (体现滚动)
+  const mx = x + Math.cos(ball.spin) * r * 0.5;
+  const my = y + Math.sin(ball.spin) * r * 0.5;
+  ctx.beginPath(); ctx.arc(mx, my, r * 0.14, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,110,175,0.75)'; ctx.fill();
   ctx.restore();
 }
 
@@ -461,7 +492,7 @@ function loop(now) {
   state.lastFrame = now;
 
   // 节拍检测 -> 生成新台阶 + 命令小球起跳
-  const { beat, strength, energy } = detectBeat(dt);
+  const { beat, strength, energy, sustain } = detectBeat(dt);
   state.level += (Math.min(1, energy / 12000) - state.level) * Math.min(1, dt*8);
   if (beat) {
     const s = addStair(false);
@@ -473,7 +504,7 @@ function loop(now) {
   // 台阶生长动画
   for (const s of stairs) if (s.born < 1) s.born += dt * 6;
 
-  updateBall(dt);
+  updateBall(dt, sustain);
   updateCamera(dt);
   updateFx(dt);
 
