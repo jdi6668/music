@@ -77,11 +77,11 @@
   <div class="overlay" id="start-overlay">
     <div class="title">水下气泡节奏音符</div>
     <div class="subtitle">
-      气泡从水底不断上浮，歌词《黑色毛衣》会随音乐逐句化作阶梯文字挂在水中。<br>
-      当上浮的气泡撞到发光的歌词字块时会回弹并得分，跟着节拍击中更多字，冲击最高连击！
+      一颗气泡沿着《黑色毛衣》的歌词阶梯持续上升，镜头跟着它一路向上。<br>
+      每唱到一个字，气泡就会撞上那个字弹一下、点亮它，然后继续上浮撞向下一个字。
     </div>
     <button class="btn" id="start-btn">开始游戏</button>
-    <div class="hint">建议戴上耳机 · 点击屏幕也能生成额外气泡</div>
+    <div class="hint">建议戴上耳机 · 气泡与歌声同步逐字弹跳</div>
   </div>
 
   <div class="overlay hidden" id="end-overlay">
@@ -99,54 +99,56 @@
    音频解析(节拍) → 阶梯式歌词文字轨道 → 水下气泡物理 → 碰撞回弹得分
    ============================================================ */
 
-// ---------- 歌词时间轴 (黑色毛衣 - 周杰伦) [秒, 文本] ----------
-// 时间戳为近似值, 用于按音乐进度生成阶梯文字
-const LYRICS = [
-  [6.0,  "一件黑色毛衣"],
-  [10.0, "两个人的回忆"],
-  [14.0, "雨过之后"],
-  [16.5, "更难忘记"],
-  [19.5, "忘记我还爱你"],
-  [24.5, "你打的毛衣"],
-  [28.5, "让我爱不释手"],
-  [33.0, "送你的钻石"],
-  [36.5, "此刻在我手"],
-  [40.0, "心血来潮"],
-  [42.5, "全部都锁在保险柜"],
-  [48.0, "藏着你给的温柔"],
-  [54.0, "在美的爱情"],
-  [57.0, "我都有见识过"],
-  [61.0, "很快乐"],
-  [63.5, "在你身边度过"],
-  [67.5, "以为你我会永久"],
-  [72.0, "谁知道你早就想放手"],
-  [78.0, "我送你的项链"],
-  [82.0, "你说太沉重"],
-  [86.0, "承受不起这段感情"],
-  [92.0, "所以你精神外遇"],
-  [98.0, "分手当天你却哭红了眼睛"],
-  [106.0,"是我不懂得珍惜"],
-  [112.0,"还是你不再爱我"],
-  [118.0,"我用你送的毛衣"],
-  [124.0,"温暖我自己"],
-  [130.0,"一件黑色毛衣"],
-  [134.0,"两个人的回忆"],
-  [138.0,"雨过之后"],
-  [140.5,"更难忘记"],
-  [143.5,"忘记我还爱你"],
-  [148.0,"你打的毛衣"],
-  [152.0,"让我爱不释手"],
-  [156.5,"送你的钻石"],
-  [160.0,"此刻在我手"],
-  [163.5,"心血来潮"],
-  [166.0,"全部都锁在保险柜"],
-  [171.5,"藏着你给的温柔"],
-  [178.0,"雨下的越来越无情"],
-  [184.0,"敲打我全部的记忆"],
-  [190.0,"你说你也会舍不得"],
-  [196.0,"离开我抱着我说"],
-  [202.0,"你也会心痛的"],
-];
+// ---------- 歌词时间轴 (从 heisemaoyi.lrc 读取) [秒, 文本] ----------
+let LYRICS = [];
+
+// 需要过滤掉的非歌词信息 (制作信息 / 标题)
+const LRC_SKIP = ['词：','曲：','编曲','制作人','制作','和声','混音','母带','监制',' - ','：Jay','演唱'];
+
+// 解析标准 LRC 文本 -> [ [秒, 文本], ... ]
+function parseLRC(text) {
+  const out = [];
+  const lines = text.split(/\r?\n/);
+  const timeTag = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
+  for (const line of lines) {
+    // 收集该行所有时间标签
+    const times = [];
+    let m;
+    timeTag.lastIndex = 0;
+    while ((m = timeTag.exec(line)) !== null) {
+      const min = parseInt(m[1], 10);
+      const sec = parseInt(m[2], 10);
+      const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+      times.push(min * 60 + sec + frac);
+    }
+    if (!times.length) continue;
+    // 去掉时间标签后的纯文本
+    const content = line.replace(timeTag, '').trim();
+    if (!content) continue;
+    if (LRC_SKIP.some(k => content.includes(k))) continue;
+    // 一行内多个短句 (空格分隔) 拆成阶梯字块, 时间在到下一句之间均匀分布
+    const segs = content.split(/\s+/).filter(Boolean);
+    for (const t of times) {
+      segs.forEach((seg, i) => {
+        out.push([t + i * 2.2, seg]);
+      });
+    }
+  }
+  out.sort((a, b) => a[0] - b[0]);
+  return out;
+}
+
+// 载入 lrc 文件
+async function loadLyrics() {
+  try {
+    const res = await fetch('heisemaoyi.lrc');
+    const text = await res.text();
+    LYRICS = parseLRC(text);
+  } catch (e) {
+    console.warn('歌词载入失败, 将无歌词运行', e);
+    LYRICS = [];
+  }
+}
 
 // ---------- Canvas 初始化 ----------
 const canvas = document.getElementById('game');
@@ -207,137 +209,143 @@ function playHitSound(strength) {
   osc.start(t); osc.stop(t + 0.26);
 }
 
-// ---------- 气泡 ----------
-const bubbles = [];
+// ---------- 常量 / 世界 ----------
 const COLORS = ['#7fe0ff','#a6f0ff','#c7f0ff','#8fd6ff','#b3e5ff'];
+const SPEED = 90;          // 每秒上升的世界像素 (气泡上升速度, 与歌词同步)
 
-class Bubble {
-  constructor(x, r, boost) {
-    this.x = x;
-    this.y = H + r + 10;
-    this.r = r;
-    this.vx = (Math.random()-0.5) * 20;
-    this.vy = -(40 + Math.random()*30) * (1 + (boost||0));
-    this.buoyancy = 55 + Math.random()*40;   // 持续向上浮力
-    this.drag = 0.9;                          // 水阻力
-    this.wobblePhase = Math.random()*Math.PI*2;
-    this.wobbleAmp = 12 + Math.random()*18;
-    this.color = COLORS[(Math.random()*COLORS.length)|0];
-    this.life = 0;
-    this.dead = false;
-    this.cooldown = 0; // 碰撞后短暂免碰
+// ---------- 逐字音符 (歌词拆成单字, 沿竖直阶梯排布) ----------
+const notes = [];          // {time, ch, x, worldY, hit, glow, shakeT}
+
+function buildNotes() {
+  notes.length = 0;
+  const punct = /[，。！？、,.!?；;：:\s（）()「」“”\"']/;
+  for (let i = 0; i < LYRICS.length; i++) {
+    const t = LYRICS[i][0], text = LYRICS[i][1];
+    const nextT = (i + 1 < LYRICS.length) ? LYRICS[i + 1][0] : t + 3;
+    const chars = Array.from(text).filter(c => !punct.test(c));
+    if (!chars.length) continue;
+    // 每个字占用的时间, 让唱到该字时气泡正好撞上
+    const dur = Math.max(0.4, Math.min(nextT - t, chars.length * 0.55));
+    const step = dur / chars.length;
+    chars.forEach((ch, j) => {
+      notes.push({ time: t + j * step, ch, x: 0, worldY: 0, hit: false, glow: 0, shakeT: 0 });
+    });
   }
-  update(dt) {
-    this.life += dt;
-    // 浮力
-    this.vy -= this.buoyancy * dt;
-    // 左右水流扰动
-    this.wobblePhase += dt * 2.2;
-    this.vx += Math.sin(this.wobblePhase) * this.wobbleAmp * dt;
-    // 水阻力 (减速)
-    this.vx *= Math.pow(this.drag, dt*60/60);
-    this.vy *= Math.pow(0.995, dt*60/60);
-    // 位置
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
-    if (this.cooldown > 0) this.cooldown -= dt;
-    // 边界
-    if (this.x < this.r) { this.x = this.r; this.vx *= -0.6; }
-    if (this.x > W - this.r) { this.x = W - this.r; this.vx *= -0.6; }
-    if (this.y < -this.r*2) this.dead = true;
-  }
-  draw() {
-    const g = ctx.createRadialGradient(this.x - this.r*0.3, this.y - this.r*0.3, this.r*0.1, this.x, this.y, this.r);
-    g.addColorStop(0, 'rgba(255,255,255,0.9)');
-    g.addColorStop(0.25, this.color + 'cc');
-    g.addColorStop(1, this.color + '22');
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
-    ctx.fillStyle = g;
-    ctx.fill();
-    // 高光
-    ctx.beginPath();
-    ctx.arc(this.x - this.r*0.32, this.y - this.r*0.32, this.r*0.22, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fill();
-    // 边缘
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
-    ctx.strokeStyle = 'rgba(200,240,255,0.5)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
+  notes.sort((a, b) => a.time - b.time);
+  layoutNotes();
 }
 
-function spawnBubble(boost) {
-  const r = 14 + Math.random()*20;
-  const x = 40 + Math.random()*(W-80);
-  bubbles.push(new Bubble(x, r, boost));
-  if (bubbles.length > 120) bubbles.shift();
+// 蛇形阶梯横向摆位 + 竖直方向按时间映射 (时间越晚 = 越高 = worldY 越小)
+function layoutNotes() {
+  const margin = Math.max(56, W * 0.16);
+  const span = W - margin * 2;
+  const period = 10;
+  notes.forEach((n, i) => {
+    const phase = (i % period) / period;         // 0..1
+    const tri = 1 - Math.abs(phase * 2 - 1);      // 三角波 0..1..0
+    n.x = margin + span * tri;
+    n.worldY = -n.time * SPEED;
+  });
 }
 
-// ---------- 阶梯歌词文字块 ----------
-const lyricBlocks = [];
-let stepIndex = 0;
+function upcomingNote() {
+  const t = audioEl.currentTime;
+  for (const n of notes) if (n.time >= t - 0.05) return n;
+  return null;
+}
 
-class LyricBlock {
-  constructor(text) {
-    this.text = text;
-    // 阶梯横向分层: 依次在竖轴不同高度、左右交错
-    const layers = 6;
-    const layer = stepIndex % layers;
-    const topPad = H * 0.14, usable = H * 0.55;
-    this.y = topPad + (usable / (layers-1)) * layer;
-    // 左右交错的阶梯感
-    ctx.font = '700 26px "Microsoft YaHei", sans-serif';
-    this.w = ctx.measureText(text).width + 34;
-    this.h = 46;
-    const zig = (stepIndex % 2 === 0) ? -1 : 1;
-    const cx = W/2 + zig * (W*0.16) + (Math.random()-0.5)*W*0.1;
-    this.x = Math.max(20, Math.min(W - this.w - 20, cx - this.w/2));
-    stepIndex++;
-    this.appear = 0;
-    this.life = 0;
-    this.maxLife = 9.5;      // 停留时间
-    this.dead = false;
-    this.glow = 0;
-    this.hp = Math.max(2, Math.round(text.length / 2)); // 需要撞几下
-    this.shakeT = 0;
+// ---------- 摄像机 (跟随气泡上升) ----------
+const cam = { y: 0 };
+function updateCamera(dt) {
+  const target = bubble.worldY - H * 0.58;   // 气泡保持在屏幕偏下, 上方可见即将到来的字
+  cam.y += (target - cam.y) * Math.min(1, dt * 6);
+}
+
+// ---------- 唯一气泡 ----------
+const bubble = { x: 0, worldY: 0, r: 22, vx: 0, wobble: 0, bounce: 0, bounceVel: 0, color: '#a6f0ff' };
+
+function resetBubble() {
+  bubble.x = W / 2; bubble.worldY = 0; bubble.vx = 0;
+  bubble.wobble = Math.random() * 6; bubble.bounce = 0; bubble.bounceVel = 0;
+  bubble.color = '#a6f0ff';
+  cam.y = bubble.worldY - H * 0.58;
+}
+
+function updateBubble(dt) {
+  const t = audioEl.currentTime;
+  // 基础上升: 世界Y 跟随播放时间, 保证与歌词精准同步
+  bubble.worldY = -t * SPEED;
+  // 水平: 朝即将唱到的字靠拢, 在字间穿梭
+  const up = upcomingNote();
+  if (up) bubble.x += (up.x - bubble.x) * Math.min(1, dt * 3.5);
+  // 水流轻微左右扰动
+  bubble.wobble += dt * 2.2;
+  bubble.x += Math.sin(bubble.wobble) * 10 * dt;
+  bubble.x = Math.max(bubble.r, Math.min(W - bubble.r, bubble.x));
+  // 弹跳: 命中时向下一沉再弹回 (弹簧)
+  const k = 90, damp = 7;
+  bubble.bounceVel += (-k * bubble.bounce - damp * bubble.bounceVel) * dt;
+  bubble.bounce += bubble.bounceVel * dt;
+}
+
+function drawBubble() {
+  const x = bubble.x;
+  const y = (bubble.worldY - cam.y) + bubble.bounce;
+  const r = bubble.r;
+  const g = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
+  g.addColorStop(0, 'rgba(255,255,255,0.95)');
+  g.addColorStop(0.25, bubble.color + 'cc');
+  g.addColorStop(1, bubble.color + '22');
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fillStyle = g; ctx.shadowColor = bubble.color; ctx.shadowBlur = 20; ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(x - r*0.32, y - r*0.32, r*0.22, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(200,240,255,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+// ---------- 阶梯轨迹线 + 逐字绘制 ----------
+function drawTrack() {
+  ctx.beginPath();
+  let started = false;
+  for (const n of notes) {
+    const sy = n.worldY - cam.y;
+    if (sy < -400 || sy > H + 400) { started = false; continue; }
+    if (!started) { ctx.moveTo(n.x, sy); started = true; }
+    else ctx.lineTo(n.x, sy);
   }
-  update(dt) {
-    this.life += dt;
-    this.appear = Math.min(1, this.appear + dt*3);
-    if (this.glow > 0) this.glow -= dt*2;
-    if (this.shakeT > 0) this.shakeT -= dt;
-    if (this.life > this.maxLife || this.hp <= 0) {
-      this.dead = true;
-    }
-  }
-  draw() {
-    const a = this.appear * (this.life > this.maxLife-1 ? Math.max(0,(this.maxLife-this.life)) : 1);
+  ctx.strokeStyle = 'rgba(127,224,255,0.14)';
+  ctx.lineWidth = 2; ctx.stroke();
+}
+
+function drawNotes() {
+  ctx.font = '700 24px "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const n of notes) {
+    const sy = n.worldY - cam.y;
+    if (sy < -60 || sy > H + 60) continue;
     let ox = 0, oy = 0;
-    if (this.shakeT > 0) { ox = (Math.random()-0.5)*8; oy=(Math.random()-0.5)*8; }
-    const x = this.x + ox, y = this.y + oy;
+    if (n.shakeT > 0) { ox = (Math.random()-0.5)*6; oy = (Math.random()-0.5)*6; }
+    const x = n.x + ox, y = sy + oy, r = 20;
     ctx.save();
-    ctx.globalAlpha = a;
-    // 背景字块
-    const grad = ctx.createLinearGradient(x, y, x, y+this.h);
-    grad.addColorStop(0, `rgba(127,224,255,${0.22 + this.glow*0.5})`);
-    grad.addColorStop(1, `rgba(79,184,230,${0.12 + this.glow*0.4})`);
-    roundRect(x, y, this.w, this.h, 12);
-    ctx.fillStyle = grad;
-    ctx.shadowColor = 'rgba(127,224,255,'+(0.5+this.glow)+')';
-    ctx.shadowBlur = 18 + this.glow*30;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = `rgba(200,240,255,${0.6})`;
-    ctx.lineWidth = 1.5;
-    roundRect(x, y, this.w, this.h, 12); ctx.stroke();
-    // 文字
-    ctx.font = '700 26px "Microsoft YaHei", sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#f2fbff';
-    ctx.fillText(this.text, x + this.w/2, y + this.h/2 + 1);
+    if (n.hit) {
+      const gl = Math.max(0, n.glow);
+      ctx.shadowColor = `rgba(255,214,120,${0.4 + gl})`;
+      ctx.shadowBlur = 12 + gl * 26;
+      ctx.beginPath(); ctx.arc(x, y, r + gl*4, 0, Math.PI*2);
+      const g = ctx.createRadialGradient(x-6, y-6, 2, x, y, r + gl*4);
+      g.addColorStop(0, 'rgba(255,245,210,0.95)');
+      g.addColorStop(1, `rgba(255,190,90,${0.5 + gl*0.4})`);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#4a2d00';
+    } else {
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(127,224,255,0.12)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(180,235,255,0.55)'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#eaf9ff';
+    }
+    ctx.fillText(n.ch, x, y + 1);
     ctx.restore();
   }
 }
@@ -352,14 +360,14 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-// ---------- 粒子 (命中特效) ----------
+// ---------- 粒子 (命中特效, 世界坐标) ----------
 const particles = [];
-function burst(x, y, color) {
-  for (let i=0;i<10;i++) {
+function burst(wx, wy, color) {
+  for (let i=0;i<12;i++) {
     particles.push({
-      x, y,
-      vx: (Math.random()-0.5)*260,
-      vy: (Math.random()-0.5)*260 - 60,
+      x: wx, y: wy,
+      vx: (Math.random()-0.5)*280,
+      vy: (Math.random()-0.5)*280 - 40,
       life: 0.6 + Math.random()*0.3,
       t: 0, r: 2+Math.random()*3, color
     });
@@ -367,81 +375,54 @@ function burst(x, y, color) {
 }
 function updateParticles(dt) {
   for (const p of particles) {
-    p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 120*dt;
+    p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 200*dt;
   }
   for (let i=particles.length-1;i>=0;i--) if (particles[i].t>particles[i].life) particles.splice(i,1);
 }
 function drawParticles() {
   for (const p of particles) {
     ctx.globalAlpha = Math.max(0, 1 - p.t/p.life);
-    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.beginPath(); ctx.arc(p.x, p.y - cam.y, p.r, 0, Math.PI*2);
     ctx.fillStyle = p.color; ctx.fill();
   }
   ctx.globalAlpha = 1;
 }
 
-// ---------- 碰撞检测: 气泡 vs 文字块 ----------
-function checkCollisions() {
-  for (const b of bubbles) {
-    if (b.cooldown > 0) continue;
-    for (const blk of lyricBlocks) {
-      if (blk.dead || blk.appear < 0.5) continue;
-      // 圆 vs 矩形
-      const nx = Math.max(blk.x, Math.min(b.x, blk.x + blk.w));
-      const ny = Math.max(blk.y, Math.min(b.y, blk.y + blk.h));
-      const dx = b.x - nx, dy = b.y - ny;
-      if (dx*dx + dy*dy <= b.r*b.r) {
-        // 命中: 气泡向下回弹
-        b.vy = Math.abs(b.vy) * 0.9 + 60;   // 向下弹
-        b.vx += (b.x - (blk.x+blk.w/2)) * 0.3;
-        b.cooldown = 0.4;
-        // 文字反馈
-        blk.glow = 1; blk.shakeT = 0.18; blk.hp -= 1;
-        // 计分
-        const gain = 100 + state.combo * 5;
-        state.score += gain;
-        state.combo += 1;
-        state.maxCombo = Math.max(state.maxCombo, state.combo);
-        state.hits += 1;
-        playHitSound(Math.min(1, b.r/34));
-        burst(b.x, b.y, b.color);
-        updateHUD();
-        break;
-      }
+// ---------- 命中判定: 气泡上升到某个字的时间 -> 弹一下 ----------
+function checkNotes() {
+  const t = audioEl.currentTime;
+  for (const n of notes) {
+    if (!n.hit && t >= n.time) {
+      n.hit = true; n.glow = 1; n.shakeT = 0.18;
+      bubble.bounceVel += 260;                         // 撞到字后向下弹一下
+      bubble.color = COLORS[(Math.random()*COLORS.length)|0];
+      state.score += 100 + state.combo * 5;
+      state.combo += 1;
+      state.maxCombo = Math.max(state.maxCombo, state.combo);
+      state.hits += 1;
+      playHitSound(0.7);
+      burst(n.x, n.worldY, '#ffd67a');
+      updateHUD();
     }
   }
 }
 
-// ---------- 音频节拍检测 → 生成气泡 ----------
-function detectBeat(dt) {
-  analyser.getByteFrequencyData(freqData);
-  // 取低频能量 (鼓点)
-  let energy = 0;
-  const bass = Math.floor(freqData.length * 0.12);
-  for (let i=0;i<bass;i++) energy += freqData[i];
-  energy /= bass;
-  energyHistory.push(energy);
-  if (energyHistory.length > 43) energyHistory.shift();
-  const avg = energyHistory.reduce((a,c)=>a+c,0)/energyHistory.length;
-
-  state.beatCooldown -= dt;
-  if (energy > avg * 1.35 && energy > 60 && state.beatCooldown <= 0) {
-    const strength = Math.min(1, (energy - avg)/avg);
-    spawnBubble(strength);
-    if (strength > 0.6) spawnBubble(strength*0.5);
-    state.beatCooldown = 0.14;
+// ---------- 装饰气泡 (背景氛围, 屏幕坐标, 不参与玩法) ----------
+const ambient = [];
+function updateAmbient(dt) {
+  if (Math.random() < dt * 9) {
+    ambient.push({ x: Math.random()*W, y: H + 10, r: 3 + Math.random()*8, v: 30 + Math.random()*60, a: 0.12 + Math.random()*0.22 });
   }
-  // 持续微量气泡, 保证水底一直有气泡上浮
-  if (Math.random() < dt * 3) spawnBubble(0);
+  for (const a of ambient) a.y -= a.v * dt;
+  for (let i = ambient.length-1; i >= 0; i--) if (ambient[i].y < -20) ambient.splice(i, 1);
 }
-
-// ---------- 歌词生成 (按音乐进度) ----------
-function updateLyrics() {
-  const t = audioEl.currentTime;
-  while (state.nextLyric < LYRICS.length && LYRICS[state.nextLyric][0] <= t) {
-    lyricBlocks.push(new LyricBlock(LYRICS[state.nextLyric][1]));
-    state.nextLyric++;
+function drawAmbient() {
+  for (const a of ambient) {
+    ctx.globalAlpha = a.a;
+    ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2);
+    ctx.fillStyle = '#bfeeff'; ctx.fill();
   }
+  ctx.globalAlpha = 1;
 }
 
 // ---------- 水下环境背景 ----------
@@ -485,25 +466,21 @@ function loop(now) {
 
   ctx.clearRect(0,0,W,H);
   drawBackground(dt);
-
-  detectBeat(dt);
-  updateLyrics();
+  updateAmbient(dt);
 
   // update
-  for (const b of bubbles) b.update(dt);
-  for (const blk of lyricBlocks) blk.update(dt);
+  updateBubble(dt);
+  checkNotes();
+  updateCamera(dt);
+  for (const n of notes) { if (n.glow > 0) n.glow -= dt*1.5; if (n.shakeT > 0) n.shakeT -= dt; }
   updateParticles(dt);
-  checkCollisions();
 
-  // 若气泡长时间没撞到东西不清连击, 这里连击断裂由超时处理
-  // draw
-  for (const blk of lyricBlocks) blk.draw();
-  for (const b of bubbles) b.draw();
+  // draw (世界内容随摄像机上升)
+  drawAmbient();
+  drawTrack();
+  drawNotes();
+  drawBubble();
   drawParticles();
-
-  // cleanup
-  for (let i=bubbles.length-1;i>=0;i--) if (bubbles[i].dead) bubbles.splice(i,1);
-  for (let i=lyricBlocks.length-1;i>=0;i--) if (lyricBlocks[i].dead) lyricBlocks.splice(i,1);
 
   document.getElementById('time-value').textContent = fmtTime(audioEl.currentTime);
 
@@ -521,12 +498,14 @@ setInterval(() => {
 async function startGame() {
   if (!audioCtx) setupAudio();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
+  if (!LYRICS.length) await loadLyrics();
   document.getElementById('start-overlay').classList.add('hidden');
   document.getElementById('end-overlay').classList.add('hidden');
   // reset
-  bubbles.length = 0; lyricBlocks.length = 0; particles.length = 0;
-  stepIndex = 0; energyHistory = [];
-  Object.assign(state, { running:true, score:0, combo:0, maxCombo:0, hits:0, nextLyric:0, beatCooldown:0, _lastHits:0 });
+  buildNotes();
+  particles.length = 0; ambient.length = 0;
+  resetBubble();
+  Object.assign(state, { running:true, score:0, combo:0, maxCombo:0, hits:0, _lastHits:0 });
   updateHUD();
   audioEl.currentTime = 0;
   try { await audioEl.play(); } catch(e){ console.warn('播放失败', e); }
@@ -545,14 +524,8 @@ function endGame() {
 document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', startGame);
 
-// 点击生成额外气泡
-canvas.addEventListener('pointerdown', (e) => {
-  if (!state.running) return;
-  const r = 16 + Math.random()*18;
-  const b = new Bubble(e.clientX, r, 0.3);
-  b.y = e.clientY; b.vy = -120;
-  bubbles.push(b);
-});
+// 窗口尺寸变化时重新摆位歌词
+window.addEventListener('resize', () => { if (notes.length) layoutNotes(); });
 </script>
 </body>
 </html>
