@@ -479,7 +479,7 @@ function drawStairs() {
       ctx.globalAlpha = grow;
       ctx.font = '700 26px "Microsoft YaHei", sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const cx = sx + s.w / 2, cy = topY - 26;
+      const cx = sx + s.w / 2, cy = topY - (ball.r * 2 + 18);
       ctx.shadowColor = s.color; ctx.shadowBlur = 14 * grow;
       ctx.fillStyle = '#fff6e6';
       ctx.fillText(s.ch, cx, cy);
