@@ -8,7 +8,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
   body {
-    background: radial-gradient(circle at 50% 0%, #0a3d62 0%, #062c47 45%, #041a2e 100%);
+    background: linear-gradient(180deg, #0a4d72 0%, #063250 32%, #041f38 66%, #010b18 100%);
     display: flex; align-items: center; justify-content: center;
   }
   #game-wrap {
@@ -410,45 +410,97 @@ function checkNotes() {
 // ---------- 装饰气泡 (背景氛围, 屏幕坐标, 不参与玩法) ----------
 const ambient = [];
 function updateAmbient(dt) {
-  if (Math.random() < dt * 9) {
-    ambient.push({ x: Math.random()*W, y: H + 10, r: 3 + Math.random()*8, v: 30 + Math.random()*60, a: 0.12 + Math.random()*0.22 });
+  // 持续从水底生成不同景深的上浮气泡
+  if (Math.random() < dt * 14) {
+    const depth = Math.random();   // 0 远(慢/小/淡) .. 1 近(快/大/亮)
+    ambient.push({
+      x: Math.random()*W, y: H + 12,
+      r: 2 + depth*11, v: 22 + depth*80,
+      a: 0.10 + depth*0.30,
+      ph: Math.random()*6.28, sw: 8 + depth*22
+    });
   }
-  for (const a of ambient) a.y -= a.v * dt;
-  for (let i = ambient.length-1; i >= 0; i--) if (ambient[i].y < -20) ambient.splice(i, 1);
+  for (const a of ambient) { a.y -= a.v*dt; a.ph += dt*2; a.x += Math.sin(a.ph)*a.sw*dt; }
+  for (let i = ambient.length-1; i >= 0; i--) if (ambient[i].y < -24) ambient.splice(i, 1);
 }
 function drawAmbient() {
   for (const a of ambient) {
     ctx.globalAlpha = a.a;
+    const g = ctx.createRadialGradient(a.x - a.r*0.3, a.y - a.r*0.3, a.r*0.1, a.x, a.y, a.r);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(0.4, 'rgba(190,240,255,0.5)');
+    g.addColorStop(1, 'rgba(150,220,255,0.05)');
     ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2);
-    ctx.fillStyle = '#bfeeff'; ctx.fill();
+    ctx.fillStyle = g; ctx.fill();
+    ctx.globalAlpha = a.a * 0.7;
+    ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(200,240,255,0.5)'; ctx.lineWidth = 1; ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }
 
-// ---------- 水下环境背景 ----------
+// ---------- 深海环境背景 ----------
 let causticT = 0;
+const motes = [];   // 海洋雪: 缓慢上浮的微粒, 增强下潜/上升的深度感
+function makeMote(y) {
+  const depth = Math.random();
+  return {
+    x: Math.random()*W, y,
+    r: 0.6 + depth*2.4, v: 5 + depth*26,
+    a: 0.05 + depth*0.22,
+    drift: (Math.random()-0.5)*0.7, ph: Math.random()*Math.PI*2
+  };
+}
+function seedMotes() { motes.length = 0; for (let i=0;i<100;i++) motes.push(makeMote(Math.random()*H)); }
+
 function drawBackground(dt) {
   causticT += dt;
-  // 光柱
+  // 深海竖直渐变 (上层微光 → 深渊黑暗)
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0,    '#0a557d');
+  bg.addColorStop(0.35, '#063250');
+  bg.addColorStop(0.7,  '#041f38');
+  bg.addColorStop(1,    '#010a16');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  // 顶部透入的光束 (god rays)
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
-  for (let i=0;i<4;i++) {
-    const bx = (W/4)*i + Math.sin(causticT*0.3+i)*40 + W*0.1;
-    const grad = ctx.createLinearGradient(bx, 0, bx+120, H);
-    grad.addColorStop(0, 'rgba(127,224,255,0.10)');
-    grad.addColorStop(1, 'rgba(127,224,255,0)');
+  for (let i=0;i<5;i++) {
+    const cx = W*(0.12 + 0.19*i) + Math.sin(causticT*0.25 + i)*50;
+    const w = 55 + i*12;
+    const grad = ctx.createLinearGradient(cx, 0, cx + w, H*0.9);
+    grad.addColorStop(0, 'rgba(150,230,255,0.09)');
+    grad.addColorStop(1, 'rgba(150,230,255,0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.moveTo(bx, 0); ctx.lineTo(bx+90,0); ctx.lineTo(bx+200,H); ctx.lineTo(bx-40,H);
+    ctx.moveTo(cx, 0); ctx.lineTo(cx + w, 0);
+    ctx.lineTo(cx + w*2.2, H); ctx.lineTo(cx - w*1.2, H);
     ctx.closePath(); ctx.fill();
   }
   ctx.restore();
-  // 底部水草/暗部
-  const bg = ctx.createLinearGradient(0, H*0.7, 0, H);
-  bg.addColorStop(0, 'rgba(4,26,46,0)');
-  bg.addColorStop(1, 'rgba(2,15,28,0.7)');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, H*0.7, W, H*0.3);
+
+  // 海洋雪: 微粒持续缓缓上浮
+  if (!motes.length) seedMotes();
+  for (const m of motes) {
+    m.y -= m.v*dt; m.ph += dt; m.x += Math.sin(m.ph)*m.drift;
+    if (m.y < -4) Object.assign(m, makeMote(H + 4));
+    ctx.globalAlpha = m.a;
+    ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
+    ctx.fillStyle = '#cdeeff'; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 顶部亮光
+  const tv = ctx.createLinearGradient(0, 0, 0, H*0.32);
+  tv.addColorStop(0, 'rgba(120,220,255,0.12)');
+  tv.addColorStop(1, 'rgba(120,220,255,0)');
+  ctx.fillStyle = tv; ctx.fillRect(0, 0, W, H*0.32);
+  // 底部深渊暗角
+  const dv = ctx.createLinearGradient(0, H*0.55, 0, H);
+  dv.addColorStop(0, 'rgba(1,10,22,0)');
+  dv.addColorStop(1, 'rgba(0,5,12,0.9)');
+  ctx.fillStyle = dv; ctx.fillRect(0, H*0.55, W, H*0.45);
 }
 
 // ---------- HUD ----------
@@ -525,7 +577,7 @@ document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', startGame);
 
 // 窗口尺寸变化时重新摆位歌词
-window.addEventListener('resize', () => { if (notes.length) layoutNotes(); });
+window.addEventListener('resize', () => { if (notes.length) layoutNotes(); motes.length = 0; });
 </script>
 </body>
 </html>
