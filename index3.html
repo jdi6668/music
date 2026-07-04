@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>旋律阶梯 · 小球跳跳</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                position: relative;
+            }
+
+            body::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+                animation: pulse 4s ease-in-out infinite;
+                pointer-events: none;
+            }
+
+            @keyframes pulse {
+                0%, 100% { opacity: 0.3; transform: scale(1); }
+                50% { opacity: 0.6; transform: scale(1.05); }
+            }
+
+            .container {
+                width: 95%;
+                max-width: 1200px;
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                border-radius: 20px;
+                padding: 20px;
+                box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                position: relative;
+                z-index: 1;
+                transition: all 0.5s ease;
+            }
+
+            .container.immersive {
+                width: 100%;
+                max-width: 100%;
+                height: 100vh;
+                border-radius: 0;
+                padding: 0;
+                background: transparent;
+                backdrop-filter: none;
+                border: none;
+            }
+
+            h1 {
+                text-align: center;
+                color: white;
+                margin-bottom: 20px;
+                font-size: clamp(1.5em, 5vw, 2.5em);
+                text-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(0, 242, 254, 0.3);
+                animation: titleGlow 3s ease-in-out infinite;
+                transition: opacity 0.5s ease, transform 0.5s ease;
+            }
+
+            .immersive h1 {
+                opacity: 0;
+                transform: translateY(-30px);
+                pointer-events: none;
+            }
+
+            @keyframes titleGlow {
+                0%, 100% { text-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(0, 242, 254, 0.3); }
+                50% { text-shadow: 0 0 20px rgba(255, 255, 255, 0.8), 0 0 40px rgba(0, 242, 254, 0.6), 0 0 60px rgba(131, 56, 236, 0.4); }
+            }
+
+            .canvas-container {
+                position: relative;
+                width: 100%;
+                height: clamp(250px, 50vh, 400px);
+                background: rgba(0, 0, 0, 0.3);
+                border-radius: 15px;
+                margin-bottom: 15px;
+                overflow: hidden;
+                box-shadow: inset 0 0 30px rgba(0, 242, 254, 0.2);
+                transition: all 0.5s ease;
+            }
+
+            .immersive .canvas-container {
+                width: 100vw;
+                height: 100vh;
+                border-radius: 0;
+                margin: 0;
+                box-shadow: none;
+            }
+
+            #visualizer {
+                width: 100%;
+                height: 100%;
+                display: block;
+            }
+
+            .controls {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 20px;
+                flex-wrap: wrap;
+                margin-bottom: 20px;
+                transition: opacity 0.5s ease, transform 0.5s ease;
+            }
+
+            .immersive .controls {
+                opacity: 0;
+                transform: translateY(30px);
+                pointer-events: none;
+            }
+
+            .immersive .controls.show {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: all;
+            }
+
+            button {
+                background: rgba(255, 255, 255, 0.2);
+                border: 2px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 50px;
+                cursor: pointer;
+                font-size: clamp(14px, 3vw, 16px);
+                font-weight: bold;
+                transition: all 0.3s ease;
+                backdrop-filter: blur(5px);
+                position: relative;
+                overflow: hidden;
+            }
+
+            button::before {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 0;
+                height: 0;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.3);
+                transform: translate(-50%, -50%);
+                transition: width 0.6s, height 0.6s;
+            }
+
+            button:active::before {
+                width: 300px;
+                height: 300px;
+            }
+
+            button:hover {
+                background: rgba(255, 255, 255, 0.3);
+                transform: translateY(-2px);
+                box-shadow: 0 5px 20px rgba(0, 242, 254, 0.4);
+            }
+
+            button:active {
+                transform: scale(0.95);
+            }
+
+            button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .time-display {
+                color: white;
+                font-size: clamp(14px, 3vw, 18px);
+                font-weight: bold;
+                text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+                width: 100%;
+                text-align: center;
+            }
+
+            .progress-container {
+                width: 100%;
+                height: 12px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+                overflow: hidden;
+                cursor: pointer;
+                margin-bottom: 15px;
+                position: relative;
+                box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.3);
+                transition: opacity 0.5s ease, transform 0.5s ease;
+            }
+
+            .immersive .progress-container {
+                position: fixed;
+                bottom: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 80%;
+                max-width: 600px;
+                z-index: 100;
+                opacity: 0;
+            }
+
+            .immersive .progress-container.show {
+                opacity: 1;
+            }
+
+            .progress-bar {
+                height: 100%;
+                background: linear-gradient(90deg, #00f2fe 0%, #4facfe 50%, #8338ec 100%);
+                width: 0%;
+                transition: width 0.1s linear;
+                border-radius: 10px;
+                box-shadow: 0 0 20px rgba(0, 242, 254, 0.6);
+                position: relative;
+            }
+
+            .progress-bar::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 20px;
+                height: 100%;
+                background: rgba(255, 255, 255, 0.5);
+                border-radius: 50%;
+                box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+            }
+
+            .info {
+                text-align: center;
+                color: rgba(255, 255, 255, 0.9);
+                font-size: 14px;
+                line-height: 1.6;
+            }
+
+            .frequency-bars {
+                display: flex;
+                align-items: flex-end;
+                justify-content: space-around;
+                height: clamp(60px, 15vh, 100px);
+                gap: 1px;
+                margin-top: 15px;
+                padding: 0 5px;
+                transition: opacity 0.5s ease, transform 0.5s ease;
+            }
+
+            .immersive .frequency-bars {
+                opacity: 0;
+                transform: translateY(30px);
+                pointer-events: none;
+            }
+
+            .bar {
+                flex: 1;
+                background: linear-gradient(to top, #00f2fe, #4facfe, #8338ec);
+                border-radius: 3px 3px 0 0;
+                transition: height 0.08s ease;
+                min-height: 2px;
+                box-shadow: 0 0 10px currentColor;
+                filter: brightness(1.2);
+            }
+
+            .lyrics-container {
+                margin-top: 20px;
+                padding: 20px 10px;
+                background: rgba(0, 0, 0, 0.4);
+                border-radius: 15px;
+                min-height: clamp(120px, 20vh, 180px);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                box-shadow: inset 0 0 30px rgba(0, 242, 254, 0.1);
+                transition: all 0.5s ease;
+            }
+
+            .immersive .lyrics-container {
+                position: fixed;
+                bottom: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 90%;
+                max-width: 800px;
+                background: rgba(0, 0, 0, 0.6);
+                backdrop-filter: blur(20px);
+                z-index: 100;
+            }
+
+            .lyrics-line {
+                font-size: clamp(24px, 6vw, 36px);
+                font-weight: bold;
+                color: white;
+                text-align: center;
+                line-height: 1.6;
+                text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8);
+                margin: 8px 0;
+                min-height: 40px;
+                perspective: 1000px;
+            }
+
+            .lyrics-char {
+                display: inline-block;
+                opacity: 0.3;
+                transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                margin: 0 1px;
+                transform-style: preserve-3d;
+            }
+
+            .lyrics-char.active {
+                opacity: 1;
+                color: #00f2fe;
+                transform: scale(1.3) rotateY(360deg) translateZ(20px);
+                text-shadow: 
+                    0 0 10px #00f2fe,
+                    0 0 20px #00f2fe,
+                    0 0 30px #4facfe,
+                    0 0 40px #4facfe,
+                    0 0 50px #8338ec,
+                    0 0 70px #8338ec;
+                animation: charPulse 0.6s ease-in-out;
+                filter: brightness(1.5);
+            }
+
+            @keyframes charPulse {
+                0%, 100% { transform: scale(1.3) rotateY(360deg) translateZ(20px); }
+                50% { transform: scale(1.6) rotateY(180deg) translateZ(30px); }
+            }
+
+            .lyrics-char.passed {
+                opacity: 0.7;
+                color: #ffffff;
+                text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            }
+
+            .next-line {
+                font-size: clamp(16px, 4vw, 20px);
+                color: rgba(255, 255, 255, 0.5);
+                margin-top: 10px;
+            }
+
+            .info {
+                display: none;
+            }
+
+            @media (min-width: 768px) {
+                .info {
+                    display: block;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .container {
+                    padding: 15px;
+                }
+                
+                .controls {
+                    gap: 10px;
+                }
+                
+                button {
+                    padding: 10px 20px;
+                }
+            }
+
+            .tap-hint {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: white;
+                font-size: clamp(18px, 4vw, 24px);
+                text-align: center;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.3s ease;
+                text-shadow: 0 0 20px rgba(0, 242, 254, 0.8);
+                z-index: 200;
+            }
+
+            .tap-hint.show {
+                opacity: 0.8;
+            }
+
+            @keyframes wave {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-10px); }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎵 旋律阶梯 · 小球跳跳 🎵</h1>
+            
+            <div class="canvas-container">
+                <canvas id="visualizer"></canvas>
+            </div>
+
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+
+            <div class="controls">
+                <button id="playBtn">▶️ 播放</button>
+                <button id="pauseBtn" disabled>⏸️ 暂停</button>
+                <button id="stopBtn" disabled>⏹️ 停止</button>
+                <span class="time-display" id="timeDisplay">0:00 / 0:00</span>
+            </div>
+
+            <div class="frequency-bars" id="frequencyBars"></div>
+
+            <div class="lyrics-container">
+                <div class="lyrics-line" id="currentLyric"></div>
+                <div class="lyrics-line next-line" id="nextLyric"></div>
+            </div>
+
+            <div class="info">
+                <p>🎼 使用 Web Audio API 实时分析音频频率</p>
+                <p>🎨 动态可视化展示旋律变化</p>
+                <p>⚡ 小球随音乐节奏跳动</p>
+                <p>🎤 歌词逐字同步显示</p>
+            </div>
+        </div>
+
+        <div class="tap-hint" id="tapHint">👆 点击屏幕显示控制</div>
+
+        <script>
+            const canvas = document.getElementById('visualizer');
+            const ctx = canvas.getContext('2d');
+            const playBtn = document.getElementById('playBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const timeDisplay = document.getElementById('timeDisplay');
+            const progressBar = document.getElementById('progressBar');
+            const progressContainer = document.getElementById('progressContainer');
+            const frequencyBarsContainer = document.getElementById('frequencyBars');
+
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            let audio = new Audio('heisemaoyi.mp3');
+            let audioContext;
+            let analyser;
+            let dataArray;
+            let bufferLength;
+            let source;
+            let isPlaying = false;
+            let balls = [];
+            let particles = [];
+            let lyrics = [];
+            let currentLyricIndex = -1;
+            let currentCharIndex = 0;
+            let immersiveMode = false;
+            let hideControlsTimeout;
+            const currentLyricEl = document.getElementById('currentLyric');
+            const nextLyricEl = document.getElementById('nextLyric');
+            const container = document.querySelector('.container');
+            const controls = document.querySelector('.controls');
+            const tapHint = document.getElementById('tapHint');
+
+            class Particle {
+                constructor(x, y, color) {
+                    this.x = x;
+                    this.y = y;
+                    this.vx = (Math.random() - 0.5) * 6;
+                    this.vy = (Math.random() - 0.5) * 6 - 2;
+                    this.life = 1;
+                    this.color = color;
+                    this.size = Math.random() * 4 + 2;
+                    this.rotation = Math.random() * Math.PI * 2;
+                    this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+                }
+
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.vy += 0.15;
+                    this.vx *= 0.98;
+                    this.life -= 0.015;
+                    this.rotation += this.rotationSpeed;
+                }
+
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = this.life;
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(this.rotation);
+                    
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = this.color;
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size, 0);
+                    ctx.lineTo(this.size, 0);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    
+                    ctx.restore();
+                }
+            }
+
+            function enterImmersiveMode() {
+                immersiveMode = true;
+                container.classList.add('immersive');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                showTapHint();
+            }
+
+            function exitImmersiveMode() {
+                immersiveMode = false;
+                container.classList.remove('immersive');
+                controls.classList.remove('show');
+                progressContainer.classList.remove('show');
+                canvas.width = canvas.offsetWidth;
+                canvas.height = canvas.offsetHeight;
+            }
+
+            function showTapHint() {
+                tapHint.classList.add('show');
+                setTimeout(() => {
+                    tapHint.classList.remove('show');
+                }, 2000);
+            }
+
+            function toggleControls() {
+                if (!immersiveMode) return;
+                
+                const isShowing = controls.classList.contains('show');
+                
+                if (isShowing) {
+                    controls.classList.remove('show');
+                    progressContainer.classList.remove('show');
+                } else {
+                    controls.classList.add('show');
+                    progressContainer.classList.add('show');
+                    
+                    clearTimeout(hideControlsTimeout);
+                    hideControlsTimeout = setTimeout(() => {
+                        controls.classList.remove('show');
+                        progressContainer.classList.remove('show');
+                    }, 3000);
+                }
+            }
+
+            document.addEventListener('click', (e) => {
+                if (immersiveMode && !e.target.closest('button') && !e.target.closest('.progress-container')) {
+                    toggleControls();
+                }
+            });
+
+            document.addEventListener('touchstart', (e) => {
+                if (immersiveMode && !e.target.closest('button') && !e.target.closest('.progress-container')) {
+                    toggleControls();
+                }
+            });
+
+            const NUM_BARS = 32;
+            for (let i = 0; i < NUM_BARS; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                frequencyBarsContainer.appendChild(bar);
+            }
+            const bars = document.querySelectorAll('.bar');
+
+            function parseLRC(lrcText) {
+                const lines = lrcText.split('\n');
+                const parsed = [];
+                const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2})\](.+)/;
+                
+                lines.forEach(line => {
+                    const match = line.match(timeRegex);
+                    if (match) {
+                        const minutes = parseInt(match[1]);
+                        const seconds = parseInt(match[2]);
+                        const centiseconds = parseInt(match[3]);
+                        const text = match[4].trim();
+                        const time = minutes * 60 + seconds + centiseconds / 100;
+                        
+                        if (text) {
+                            parsed.push({ time, text });
+                        }
+                    }
+                });
+                
+                return parsed.sort((a, b) => a.time - b.time);
+            }
+
+            fetch('heisemaoyi.lrc')
+                .then(response => response.text())
+                .then(lrcText => {
+                    lyrics = parseLRC(lrcText);
+                    console.log('歌词加载成功:', lyrics.length + ' 行');
+                })
+                .catch(err => {
+                    console.error('歌词加载失败:', err);
+                });
+
+            function displayLyricLine(lyric, element, startDelay = 0) {
+                element.innerHTML = '';
+                const chars = lyric.text.split('');
+                const charDuration = lyric.duration ? lyric.duration / chars.length : 0.15;
+                
+                chars.forEach((char, index) => {
+                    const span = document.createElement('span');
+                    span.className = 'lyrics-char';
+                    span.textContent = char;
+                    span.dataset.index = index;
+                    element.appendChild(span);
+                });
+                
+                return { chars: element.querySelectorAll('.lyrics-char'), charDuration };
+            }
+
+            function updateLyrics() {
+                if (lyrics.length === 0 || !isPlaying) return;
+                
+                const currentTime = audio.currentTime;
+                
+                let newLyricIndex = -1;
+                for (let i = 0; i < lyrics.length; i++) {
+                    if (currentTime >= lyrics[i].time) {
+                        newLyricIndex = i;
+                    } else {
+                        break;
+                    }
+                }
+                
+                if (newLyricIndex !== currentLyricIndex && newLyricIndex >= 0) {
+                    currentLyricIndex = newLyricIndex;
+                    currentCharIndex = 0;
+                    
+                    const currentLyric = lyrics[currentLyricIndex];
+                    const nextLyric = lyrics[currentLyricIndex + 1];
+                    
+                    if (nextLyric) {
+                        currentLyric.duration = nextLyric.time - currentLyric.time;
+                    } else {
+                        currentLyric.duration = 5;
+                    }
+                    
+                    displayLyricLine(currentLyric, currentLyricEl);
+                    
+                    if (nextLyric) {
+                        nextLyricEl.textContent = nextLyric.text;
+                    } else {
+                        nextLyricEl.textContent = '';
+                    }
+                }
+                
+                if (currentLyricIndex >= 0) {
+                    const currentLyric = lyrics[currentLyricIndex];
+                    const elapsed = currentTime - currentLyric.time;
+                    const chars = currentLyricEl.querySelectorAll('.lyrics-char');
+                    const charDuration = currentLyric.duration / chars.length;
+                    
+                    chars.forEach((char, index) => {
+                        const charStartTime = index * charDuration;
+                        const charEndTime = (index + 1) * charDuration;
+                        
+                        if (elapsed >= charEndTime) {
+                            char.classList.remove('active');
+                            char.classList.add('passed');
+                        } else if (elapsed >= charStartTime) {
+                            char.classList.add('active');
+                            char.classList.remove('passed');
+                        } else {
+                            char.classList.remove('active', 'passed');
+                        }
+                    });
+                }
+            }
+
+            class Ball {
+                constructor(x, y, radius, color, frequency) {
+                    this.x = x;
+                    this.y = y;
+                    this.radius = radius;
+                    this.color = color;
+                    this.frequency = frequency;
+                    this.baseY = y;
+                    this.velocity = 0;
+                    this.gravity = 0.6;
+                    this.rotation = 0;
+                    this.trail = [];
+                }
+
+                update(amplitude) {
+                    const jumpForce = amplitude * 0.35;
+                    this.velocity -= jumpForce;
+                    this.velocity += this.gravity;
+                    this.y += this.velocity;
+
+                    if (this.y > this.baseY) {
+                        this.y = this.baseY;
+                        this.velocity *= -0.75;
+                        
+                        if (amplitude > 100) {
+                            for (let i = 0; i < 5; i++) {
+                                particles.push(new Particle(this.x, this.y, this.color));
+                            }
+                        }
+                    }
+
+                    this.radius = 15 + amplitude * 0.15;
+                    this.rotation += 0.1;
+                    
+                    this.trail.push({ x: this.x, y: this.y, radius: this.radius });
+                    if (this.trail.length > 8) {
+                        this.trail.shift();
+                    }
+                }
+
+                draw() {
+                    this.trail.forEach((point, index) => {
+                        const alpha = (index + 1) / this.trail.length * 0.3;
+                        ctx.save();
+                        ctx.globalAlpha = alpha;
+                        ctx.beginPath();
+                        ctx.arc(point.x, point.y, point.radius * 0.8, 0, Math.PI * 2);
+                        ctx.fillStyle = this.color;
+                        ctx.fill();
+                        ctx.restore();
+                    });
+
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(this.rotation);
+                    
+                    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius);
+                    gradient.addColorStop(0, this.color);
+                    gradient.addColorStop(0.5, this.color);
+                    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = gradient;
+                    ctx.shadowBlur = 30;
+                    ctx.shadowColor = this.color;
+                    ctx.fill();
+                    
+                    ctx.beginPath();
+                    ctx.arc(0, 0, this.radius * 0.6, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.fill();
+                    
+                    ctx.restore();
+                }
+            }
+
+            function initAudio() {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+
+                    source = audioContext.createMediaElementSource(audio);
+                    source.connect(analyser);
+                    analyser.connect(audioContext.destination);
+
+                    const colors = ['#ff006e', '#fb5607', '#ffbe0b', '#8338ec', '#3a86ff', '#06ffa5'];
+                    const numBalls = 8;
+                    for (let i = 0; i < numBalls; i++) {
+                        const x = (canvas.width / (numBalls + 1)) * (i + 1);
+                        const y = canvas.height - 50;
+                        const color = colors[i % colors.length];
+                        balls.push(new Ball(x, y, 15, color, i));
+                    }
+                }
+            }
+
+            function visualize() {
+                if (!isPlaying) return;
+
+                requestAnimationFrame(visualize);
+
+                analyser.getByteFrequencyData(dataArray);
+                updateLyrics();
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = canvas.width / bufferLength;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height * 0.7;
+                    
+                    const hue = (i / bufferLength) * 360;
+                    const gradient = ctx.createLinearGradient(x, canvas.height, x, canvas.height - barHeight);
+                    gradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.8)`);
+                    gradient.addColorStop(1, `hsla(${hue + 60}, 100%, 60%, 0.9)`);
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                    ctx.shadowBlur = 0;
+                    
+                    x += barWidth;
+                }
+
+                particles = particles.filter(p => p.life > 0);
+                particles.forEach(particle => {
+                    particle.update();
+                    particle.draw();
+                });
+
+                balls.forEach((ball, index) => {
+                    const freqIndex = Math.floor((index / balls.length) * bufferLength);
+                    const amplitude = dataArray[freqIndex] || 0;
+                    ball.update(amplitude);
+                    ball.draw();
+                });
+
+                for (let i = 0; i < NUM_BARS && i < bufferLength; i++) {
+                    const value = dataArray[Math.floor(i * bufferLength / NUM_BARS)];
+                    const height = (value / 255) * 100;
+                    bars[i].style.height = height + 'px';
+                    const hue = (i / NUM_BARS) * 360;
+                    bars[i].style.background = `linear-gradient(to top, hsl(${hue}, 100%, 50%), hsl(${hue + 60}, 100%, 60%))`;
+                }
+            }
+
+            function updateTime() {
+                if (!audio.duration) return;
+                
+                const currentMinutes = Math.floor(audio.currentTime / 60);
+                const currentSeconds = Math.floor(audio.currentTime % 60);
+                const durationMinutes = Math.floor(audio.duration / 60);
+                const durationSeconds = Math.floor(audio.duration % 60);
+                
+                timeDisplay.textContent = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')} / ${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
+                
+                const progress = (audio.currentTime / audio.duration) * 100;
+                progressBar.style.width = progress + '%';
+            }
+
+            playBtn.addEventListener('click', () => {
+                initAudio();
+                audio.play();
+                isPlaying = true;
+                playBtn.disabled = true;
+                pauseBtn.disabled = false;
+                stopBtn.disabled = false;
+                visualize();
+                
+                setTimeout(() => {
+                    enterImmersiveMode();
+                }, 500);
+            });
+
+            pauseBtn.addEventListener('click', () => {
+                audio.pause();
+                isPlaying = false;
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+            });
+
+            stopBtn.addEventListener('click', () => {
+                audio.pause();
+                audio.currentTime = 0;
+                isPlaying = false;
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+                stopBtn.disabled = true;
+                ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                currentLyricIndex = -1;
+                currentLyricEl.innerHTML = '';
+                nextLyricEl.textContent = '';
+                exitImmersiveMode();
+            });
+
+            progressContainer.addEventListener('click', (e) => {
+                const rect = progressContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const percentage = x / rect.width;
+                audio.currentTime = percentage * audio.duration;
+            });
+
+            audio.addEventListener('timeupdate', updateTime);
+
+            audio.addEventListener('ended', () => {
+                isPlaying = false;
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+                stopBtn.disabled = true;
+            });
+
+            audio.addEventListener('error', (e) => {
+                alert('无法加载音频文件 heisemaoyi.mp3，请确保文件在同一目录下！');
+                console.error('Audio error:', e);
+            });
+
+            window.addEventListener('resize', () => {
+                if (immersiveMode) {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                } else {
+                    canvas.width = canvas.offsetWidth;
+                    canvas.height = canvas.offsetHeight;
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && immersiveMode) {
+                    exitImmersiveMode();
+                }
+                if (e.key === ' ' && isPlaying) {
+                    e.preventDefault();
+                    if (audio.paused) {
+                        audio.play();
+                        pauseBtn.disabled = false;
+                    } else {
+                        audio.pause();
+                        pauseBtn.disabled = true;
+                    }
+                }
+            });
+        </script>
+    </body>
+</html>
