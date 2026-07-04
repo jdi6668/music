@@ -599,6 +599,97 @@ function drawVignette() {
   ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
 }
 
+// ---------- 底部旋律提示器 (高级频谱条 + 波形 + 倒影) ----------
+const VIS_BARS = 72;
+let visVals = new Array(VIS_BARS).fill(0);
+function drawVisualizer(dt) {
+  if (!freqData) return;
+  const baseY = H - 26;              // 频谱基线
+  const maxH  = Math.min(150, H * 0.20);
+  const usable = Math.floor(freqData.length * 0.72);
+  const pad = 26;
+  const areaW = W - pad * 2;
+  const gap = 3;
+  const bw = (areaW - gap * (VIS_BARS - 1)) / VIS_BARS;
+
+  // 底部朦胧衬底
+  const bgGrad = ctx.createLinearGradient(0, baseY - maxH - 20, 0, H);
+  bgGrad.addColorStop(0, 'rgba(10,6,26,0)');
+  bgGrad.addColorStop(1, 'rgba(10,6,26,0.55)');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, baseY - maxH - 20, W, maxH + 46);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const wave = [];
+  for (let i = 0; i < VIS_BARS; i++) {
+    // 对数取样, 低频更密, 视觉更自然
+    const f = Math.pow(i / (VIS_BARS - 1), 1.7);
+    const idx = Math.min(usable - 1, Math.floor(f * usable));
+    let v = freqData[idx] / 255;
+    v = Math.pow(v, 1.25);
+    // 平滑上升快、回落慢
+    visVals[i] += (v - visVals[i]) * Math.min(1, dt * (v > visVals[i] ? 22 : 7));
+    const val = visVals[i];
+    const h = 3 + val * maxH;
+    const x = pad + i * (bw + gap);
+    const hue = 275 - (i / VIS_BARS) * 180 + bgT * 12;  // 紫->青->金 流动渐变
+
+    // 主条 (上下对称, 圆角)
+    const g = ctx.createLinearGradient(0, baseY - h, 0, baseY + h);
+    g.addColorStop(0, `hsla(${hue},95%,72%,0.95)`);
+    g.addColorStop(0.5, `hsla(${hue},90%,60%,0.85)`);
+    g.addColorStop(1, `hsla(${hue+20},90%,55%,0.15)`);
+    ctx.fillStyle = g;
+    ctx.shadowColor = `hsla(${hue},100%,65%,0.9)`;
+    ctx.shadowBlur = 10 + val * 22;
+    roundRect(x, baseY - h, bw, h, Math.min(bw/2, 4)); ctx.fill();
+    // 倒影 (下方渐隐)
+    ctx.globalAlpha = 0.28;
+    ctx.shadowBlur = 0;
+    const rg = ctx.createLinearGradient(0, baseY, 0, baseY + h * 0.7);
+    rg.addColorStop(0, `hsla(${hue},90%,60%,0.5)`);
+    rg.addColorStop(1, `hsla(${hue},90%,60%,0)`);
+    ctx.fillStyle = rg;
+    roundRect(x, baseY, bw, h * 0.7, Math.min(bw/2, 4)); ctx.fill();
+    ctx.globalAlpha = 1;
+    // 顶部亮点
+    ctx.fillStyle = `hsla(${hue},100%,88%,${0.5 + val*0.5})`;
+    roundRect(x, baseY - h - 1, bw, 2.5, 1); ctx.fill();
+
+    wave.push({ x: x + bw/2, y: baseY - h });
+  }
+  // 顶部连贯波形线
+  ctx.shadowColor = 'rgba(180,220,255,0.8)';
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = 'rgba(210,235,255,0.55)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  for (let i = 0; i < wave.length; i++) {
+    const p = wave[i];
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else {
+      const prev = wave[i-1];
+      const mx = (prev.x + p.x) / 2;
+      ctx.quadraticCurveTo(prev.x, prev.y, mx, (prev.y + p.y) / 2);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // 基线发光
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const lg = ctx.createLinearGradient(pad, 0, W - pad, 0);
+  lg.addColorStop(0, 'rgba(120,90,255,0)');
+  lg.addColorStop(0.5, `rgba(150,200,255,${0.35 + audio.level*0.4})`);
+  lg.addColorStop(1, 'rgba(120,90,255,0)');
+  ctx.strokeStyle = lg; ctx.lineWidth = 2;
+  ctx.shadowColor = 'rgba(150,200,255,0.8)'; ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.moveTo(pad, baseY + 1); ctx.lineTo(W - pad, baseY + 1); ctx.stroke();
+  ctx.restore();
+}
+
 // ---------- 主循环 ----------
 const state = { running:false, lastFrame:0 };
 function loop(now) {
@@ -630,6 +721,7 @@ function loop(now) {
   ctx.restore();
 
   drawVignette();
+  drawVisualizer(dt);
   document.getElementById('time-value').textContent = fmtTime(t);
   requestAnimationFrame(loop);
 }
