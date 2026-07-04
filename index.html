@@ -85,7 +85,8 @@
 // ---------- Canvas ----------
 const canvas = document.getElementById('scene');
 const ctx = canvas.getContext('2d');
-let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+const timeValueEl = document.getElementById('time-value');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 1.5);
 function resize() {
   W = window.innerWidth; H = window.innerHeight;
   canvas.width = W * DPR; canvas.height = H * DPR;
@@ -261,7 +262,10 @@ const ball = {
   squash: 0,
   spin: 0,
   trail: [],
+  falling: false,      // 所有字播放完后进入持续下落
+  vy: 0,               // 持续下落时的垂直速度
 };
+const FREE_FALL_G = 1100;   // 持续下落的重力加速度(px/s^2)
 
 function keyTopY(k) { return k.y - KEY_H * 0.5 - ball.r + 4; }  // 键顶落点(小球中心)
 
@@ -293,6 +297,7 @@ function initBall(t0) {
   ball.x = k0.x;
   ball.y = keyTopY(k0) - Math.max(H * 0.9, 700);   // 高高在上
   ball.seg = null;
+  ball.falling = false; ball.vy = 0;
   ball.squash = 0; ball.spin = 0; ball.trail.length = 0;
   // 首段: 从 max(0, t0-1.2) 起自由下落至 key0
   const startT = Math.max(0, keys[0].time - 1.2);
@@ -311,7 +316,19 @@ function onHit(idx) {
 
 function updateBall(t, dt) {
   const seg = ball.seg;
-  if (!seg) return;
+  if (!seg) {
+    // 所有字播完: 小球持续加速下落
+    if (ball.falling) {
+      ball.vy += FREE_FALL_G * dt;
+      ball.y += ball.vy * dt;
+      ball.spin += dt * 4;
+      spawnTrail(ball.x, ball.y);
+      ball.trail.push({ x: ball.x, y: ball.y });
+      if (ball.trail.length > 14) ball.trail.shift();
+      if (ball.squash > 0) ball.squash = Math.max(0, ball.squash - dt * 5);
+    }
+    return;
+  }
   // 沿当前段插值
   let p = (t - seg.t0);
   const dur = seg.t1 - seg.t0;
@@ -333,7 +350,10 @@ function updateBall(t, dt) {
     if (ball.target < keys.length) {
       setupSegment(landedX, landedY, keys[ball.target - 1].time);
     } else {
+      // 最后一个字撞击完毕: 进入持续下落 (先给一点向上回弹)
       ball.seg = null;
+      ball.falling = true;
+      ball.vy = -180;
     }
   }
 
@@ -364,20 +384,19 @@ const trailParts = [];       // 跳跃飞行时不断洒出的拖尾粒子
 const fx = { shake: 0 };
 
 let trailHue = 30;
+const TRAIL_MAX = 90;
 function spawnTrail(wx, wy) {
-  trailHue = (trailHue + 7) % 360;
-  const n = 2;
-  for (let i = 0; i < n; i++) {
-    trailParts.push({
-      x: wx + (Math.random()-0.5)*ball.r*0.8,
-      y: wy + (Math.random()-0.5)*ball.r*0.8,
-      vx: (Math.random()-0.5)*40,
-      vy: (Math.random()-0.5)*40 + 20,
-      life: 0.45 + Math.random()*0.35, t: 0,
-      r: ball.r * (0.28 + Math.random()*0.32),
-      hue: trailHue + Math.random()*40,
-    });
-  }
+  if (trailParts.length >= TRAIL_MAX) return;
+  trailHue = (trailHue + 9) % 360;
+  trailParts.push({
+    x: wx + (Math.random()-0.5)*ball.r*0.8,
+    y: wy + (Math.random()-0.5)*ball.r*0.8,
+    vx: (Math.random()-0.5)*40,
+    vy: (Math.random()-0.5)*40 + 20,
+    life: 0.45 + Math.random()*0.35, t: 0,
+    r: ball.r * (0.28 + Math.random()*0.32),
+    hue: trailHue + Math.random()*40,
+  });
 }
 function updateTrail(dt) {
   for (const p of trailParts) { p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 60*dt; }
@@ -386,17 +405,16 @@ function updateTrail(dt) {
 function drawTrail() {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
+  // 用实心圆代替逐粒子径向渐变, 大幅降低开销; 'lighter' 叠加已能形成柔和光斑
   for (const p of trailParts) {
     const pr = p.t / p.life;
     const a = Math.max(0, 1 - pr);
     const rr = p.r * (1 - pr*0.6);
-    const gx = sx(p.x), gy = sy(p.y);
-    const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, rr);
-    g.addColorStop(0, `hsla(${p.hue},100%,72%,${a})`);
-    g.addColorStop(1, `hsla(${p.hue},100%,60%,0)`);
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(gx, gy, rr, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = a * 0.7;
+    ctx.fillStyle = `hsl(${p.hue},100%,66%)`;
+    ctx.beginPath(); ctx.arc(sx(p.x), sy(p.y), rr, 0, Math.PI*2); ctx.fill();
   }
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 function spawnHitFx(wx, wy, color) {
@@ -453,7 +471,8 @@ function shade(hex, amt) {
 function drawKeys() {
   for (const k of keys) {
     const scy = sy(k.y);
-    if (scy < -140 || scy > H + 160) continue;
+    if (scy < -140) continue;
+    if (scy > H + 160) break;                 // keys 按 y 递增, 越界后可直接结束
     const scx = sx(k.x);
     const fl = k.flash;
     ctx.save();
@@ -467,8 +486,8 @@ function drawKeys() {
     g.addColorStop(0, shade(k.color, 0.28 + fl*0.5));
     g.addColorStop(1, shade(k.color, -0.12 + fl*0.3));
     ctx.fillStyle = g;
-    ctx.shadowColor = fl > 0 ? '#ffffff' : k.color;
-    ctx.shadowBlur = 10 + fl * 40;
+    // 仅在撞击闪光时才用昂贵的 shadowBlur 发光
+    if (fl > 0) { ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 10 + fl * 40; }
     roundRect(-KEY_W/2, -KEY_H/2, KEY_W, KEY_H, 10); ctx.fill();
     ctx.shadowBlur = 0;
     // 高光条
@@ -493,8 +512,8 @@ function drawKeys() {
       const cx = scx, cy = scy - (KEY_H * 0.5 + 26);
       ctx.font = '700 ' + fsize.toFixed(1) + 'px "Microsoft YaHei", sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const lit = Math.max(0, 1 - (audioEl.currentTime - k.time)) * (k.appear > 0 ? 1 : 0.35);
-      ctx.shadowColor = k.color; ctx.shadowBlur = 12 + pop * 22 + lit * 14;
+      // 仅在刚点亮时用发光, 平时不加 shadowBlur
+      if (pop > 0) { ctx.shadowColor = k.color; ctx.shadowBlur = 12 + pop * 22; }
       ctx.fillStyle = k.appear > 0 || audioEl.currentTime > k.time ? '#fff6e6' : 'rgba(255,246,230,0.5)';
       ctx.fillText(k.ch, cx, cy);
       ctx.shadowBlur = 0;
@@ -600,7 +619,7 @@ function drawVignette() {
 }
 
 // ---------- 底部旋律提示器 (高级频谱条 + 波形 + 倒影) ----------
-const VIS_BARS = 72;
+const VIS_BARS = 56;
 let visVals = new Array(VIS_BARS).fill(0);
 function drawVisualizer(dt) {
   if (!freqData) return;
@@ -622,6 +641,7 @@ function drawVisualizer(dt) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   const wave = [];
+  const cr = Math.min(bw/2, 4);
   for (let i = 0; i < VIS_BARS; i++) {
     // 对数取样, 低频更密, 视觉更自然
     const f = Math.pow(i / (VIS_BARS - 1), 1.7);
@@ -633,29 +653,18 @@ function drawVisualizer(dt) {
     const val = visVals[i];
     const h = 3 + val * maxH;
     const x = pad + i * (bw + gap);
-    const hue = 275 - (i / VIS_BARS) * 180 + bgT * 12;  // 紫->青->金 流动渐变
+    const hue = (275 - (i / VIS_BARS) * 180 + bgT * 12) | 0;  // 紫->青->金 流动渐变
 
-    // 主条 (上下对称, 圆角)
-    const g = ctx.createLinearGradient(0, baseY - h, 0, baseY + h);
-    g.addColorStop(0, `hsla(${hue},95%,72%,0.95)`);
-    g.addColorStop(0.5, `hsla(${hue},90%,60%,0.85)`);
-    g.addColorStop(1, `hsla(${hue+20},90%,55%,0.15)`);
-    ctx.fillStyle = g;
-    ctx.shadowColor = `hsla(${hue},100%,65%,0.9)`;
-    ctx.shadowBlur = 10 + val * 22;
-    roundRect(x, baseY - h, bw, h, Math.min(bw/2, 4)); ctx.fill();
-    // 倒影 (下方渐隐)
-    ctx.globalAlpha = 0.28;
-    ctx.shadowBlur = 0;
-    const rg = ctx.createLinearGradient(0, baseY, 0, baseY + h * 0.7);
-    rg.addColorStop(0, `hsla(${hue},90%,60%,0.5)`);
-    rg.addColorStop(1, `hsla(${hue},90%,60%,0)`);
-    ctx.fillStyle = rg;
-    roundRect(x, baseY, bw, h * 0.7, Math.min(bw/2, 4)); ctx.fill();
+    // 主条 (实心, 'lighter' 叠加自带发光感, 无 shadowBlur/渐变)
+    ctx.fillStyle = `hsl(${hue},92%,62%)`;
+    roundRect(x, baseY - h, bw, h, cr); ctx.fill();
+    // 倒影 (下方渐隐, 低透明实心)
+    ctx.globalAlpha = 0.22;
+    roundRect(x, baseY, bw, h * 0.6, cr); ctx.fill();
     ctx.globalAlpha = 1;
     // 顶部亮点
-    ctx.fillStyle = `hsla(${hue},100%,88%,${0.5 + val*0.5})`;
-    roundRect(x, baseY - h - 1, bw, 2.5, 1); ctx.fill();
+    ctx.fillStyle = `hsl(${hue},100%,85%)`;
+    ctx.fillRect(x, baseY - h - 1, bw, 2.5);
 
     wave.push({ x: x + bw/2, y: baseY - h });
   }
@@ -722,7 +731,7 @@ function loop(now) {
 
   drawVignette();
   drawVisualizer(dt);
-  document.getElementById('time-value').textContent = fmtTime(t);
+  timeValueEl.textContent = fmtTime(t);
   requestAnimationFrame(loop);
 }
 function fmtTime(s){ const m=Math.floor(s/60), ss=Math.floor(s%60); return m+':'+String(ss).padStart(2,'0'); }
