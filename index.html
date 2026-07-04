@@ -117,23 +117,67 @@ function setupAudio() {
   analyser.connect(actx.destination);
 }
 
-// ---------- 星尘 ----------
+// ---------- 星空 ----------
+const STAR_COLORS = ['#ffffff','#cfe6ff','#ffd6ec','#ffe9b8','#dcc7ff','#bfeaff'];
 const stars = [];
 function initStars() {
   stars.length = 0;
-  const n = Math.round((W * H) / 9000);
+  const n = Math.round((W * H) / 2600);        // 更密集的星海
   for (let i = 0; i < n; i++) {
+    const bright = Math.random();
     stars.push({
       x: Math.random() * W, y: Math.random() * H,
-      z: Math.random() * 0.9 + 0.1,          // 景深
-      r: Math.random() * 1.4 + 0.3,
-      tw: Math.random() * Math.PI * 2,        // 闪烁相位
-      hue: 200 + Math.random() * 120
+      z: Math.random() * 0.9 + 0.1,             // 景深
+      r: (bright > 0.92 ? 1.6 + Math.random() * 1.8 : Math.random() * 1.1 + 0.3),
+      tw: Math.random() * Math.PI * 2,           // 闪烁相位
+      tws: 0.6 + Math.random() * 2.4,            // 闪烁速度
+      color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
+      flare: bright > 0.92                        // 亮星带十字星芒
     });
   }
 }
 initStars();
 addEventListener('resize', initStars);
+
+// ---------- 流星 ----------
+const meteors = [];
+let meteorTimer = 1.5;
+function spawnMeteor() {
+  const fromLeft = Math.random() < 0.5;
+  const y = Math.random() * H * 0.5;
+  meteors.push({
+    x: fromLeft ? -60 : W + 60, y,
+    vx: (fromLeft ? 1 : -1) * (420 + Math.random() * 320),
+    vy: 180 + Math.random() * 160,
+    life: 0, max: 1.1,
+    len: 140 + Math.random() * 160,
+    hue: 200 + Math.random() * 120
+  });
+}
+function updateMeteors(dt) {
+  meteorTimer -= dt;
+  if (meteorTimer <= 0) { spawnMeteor(); meteorTimer = 2.2 + Math.random() * 4; }
+  for (const m of meteors) { m.x += m.vx * dt; m.y += m.vy * dt; m.life += dt; }
+  for (let i = meteors.length - 1; i >= 0; i--) if (meteors[i].life > meteors[i].max) meteors.splice(i, 1);
+}
+function drawMeteors() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const m of meteors) {
+    const p = m.life / m.max;
+    const a = Math.sin(Math.min(1, p) * Math.PI);   // 淡入淡出
+    const ang = Math.atan2(m.vy, m.vx);
+    const tx = m.x - Math.cos(ang) * m.len, ty = m.y - Math.sin(ang) * m.len;
+    const g = ctx.createLinearGradient(m.x, m.y, tx, ty);
+    g.addColorStop(0, `hsla(${m.hue}, 100%, 88%, ${a})`);
+    g.addColorStop(1, 'hsla(0,0%,100%,0)');
+    ctx.strokeStyle = g; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.shadowColor = `hsl(${m.hue},100%,80%)`; ctx.shadowBlur = 16;
+    ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.beginPath(); ctx.arc(m.x, m.y, 2.2, 0, Math.PI*2);
+    ctx.fillStyle = `hsla(${m.hue},100%,92%,${a})`; ctx.fill();
+  }
+  ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over';
+}
 
 // ---------- 节拍涟漪 ----------
 const ripples = [];
@@ -179,42 +223,78 @@ function updateLyrics(t) {
 let hue = 210;
 function drawBackground(dt, bass) {
   hue = (hue + dt * 4) % 360;
-  // 深空底
-  const g = ctx.createRadialGradient(CX, CY * 0.9, 0, CX, CY, Math.hypot(CX, CY));
-  g.addColorStop(0, `hsl(${hue}, 45%, 10%)`);
-  g.addColorStop(0.5, '#080a18');
-  g.addColorStop(1, '#03040a');
+  const t = performance.now() / 1000;
+  // 深邃夜空 (自上而下的浪漫渐变)
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0a0620');
+  g.addColorStop(0.45, '#0b0a2a');
+  g.addColorStop(1, '#050414');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 
-  // 极光云团 (随低频缓慢呼吸)
   ctx.globalCompositeOperation = 'lighter';
-  const t = performance.now() / 1000;
-  for (let i = 0; i < 3; i++) {
-    const bh = (hue + i * 70) % 360;
-    const bx = CX + Math.cos(t * 0.15 + i * 2.1) * W * 0.28;
-    const by = CY + Math.sin(t * 0.12 + i * 1.7) * H * 0.24;
-    const rad = (Math.min(W, H) * 0.35) * (0.8 + bass * 0.5);
+  // 银河光带 (斜向柔光)
+  ctx.save();
+  ctx.translate(CX, CY); ctx.rotate(-0.5);
+  const mg = ctx.createLinearGradient(0, -H * 0.28, 0, H * 0.28);
+  mg.addColorStop(0, 'hsla(260,80%,60%,0)');
+  mg.addColorStop(0.5, `hsla(280,80%,66%,${0.10 + bass * 0.06})`);
+  mg.addColorStop(1, 'hsla(210,80%,60%,0)');
+  ctx.fillStyle = mg; ctx.fillRect(-W, -H * 0.28, W * 2, H * 0.56);
+  ctx.restore();
+
+  // 浪漫星云云团 (粉紫蓝, 随低频缓慢呼吸)
+  const clouds = [
+    { h: 320, ox: -0.26, oy: -0.18 },  // 粉
+    { h: 265, ox: 0.28,  oy: 0.14  },  // 紫
+    { h: 205, ox: 0.05,  oy: 0.28  }   // 蓝
+  ];
+  for (let i = 0; i < clouds.length; i++) {
+    const c = clouds[i];
+    const bx = CX + Math.cos(t * 0.12 + i * 2.1) * W * 0.12 + W * c.ox;
+    const by = CY + Math.sin(t * 0.10 + i * 1.7) * H * 0.10 + H * c.oy;
+    const rad = (Math.min(W, H) * 0.42) * (0.85 + bass * 0.4);
     const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rad);
-    rg.addColorStop(0, `hsla(${bh}, 90%, 60%, ${0.10 + bass * 0.10})`);
+    rg.addColorStop(0, `hsla(${c.h}, 90%, 65%, ${0.09 + bass * 0.08})`);
+    rg.addColorStop(0.6, `hsla(${c.h}, 85%, 55%, ${0.03 + bass * 0.03})`);
     rg.addColorStop(1, 'hsla(0,0%,0%,0)');
     ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(bx, by, rad, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
 }
 
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
 function drawStars(dt, bass) {
   ctx.globalCompositeOperation = 'lighter';
   const t = performance.now() / 1000;
   for (const s of stars) {
-    // 缓慢向外漂 + 视差
-    s.y -= dt * (6 + s.z * 14);
+    // 极缓慢漂移 (静谧夜空), 视差
+    s.y -= dt * (2 + s.z * 5);
     if (s.y < -4) { s.y = H + 4; s.x = Math.random() * W; }
-    const tw = 0.5 + 0.5 * Math.sin(t * 2 + s.tw);
-    const a = (0.25 + tw * 0.6) * (0.4 + bass * 0.6) * s.z;
-    const r = s.r * (1 + bass * s.z * 1.5);
-    ctx.beginPath();
-    ctx.fillStyle = `hsla(${s.hue}, 90%, 80%, ${a})`;
-    ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.fill();
+    const tw = 0.5 + 0.5 * Math.sin(t * s.tws + s.tw);   // 闪烁
+    const a = Math.min(1, (0.18 + tw * 0.75) * (0.55 + bass * 0.6) * (0.4 + s.z * 0.6));
+    const r = s.r * (1 + bass * s.z * 1.2 + tw * 0.25);
+    // 柔光晕
+    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 4);
+    glow.addColorStop(0, hexA(s.color, a));
+    glow.addColorStop(1, hexA(s.color, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(s.x, s.y, r * 4, 0, Math.PI * 2); ctx.fill();
+    // 星芯
+    ctx.fillStyle = hexA(s.color, Math.min(1, a + 0.2));
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.fill();
+    // 亮星十字星芒 (闪闪浪漫)
+    if (s.flare) {
+      const fl = (r + tw * 3) * 3.2;
+      ctx.strokeStyle = hexA(s.color, a * 0.9);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(s.x - fl, s.y); ctx.lineTo(s.x + fl, s.y);
+      ctx.moveTo(s.x, s.y - fl); ctx.lineTo(s.x, s.y + fl);
+      ctx.stroke();
+    }
   }
   ctx.globalCompositeOperation = 'source-over';
 }
@@ -348,6 +428,7 @@ function frame(now) {
 
   drawBackground(dt, bass);
   drawStars(dt, bass);
+  updateMeteors(dt); drawMeteors();
   drawRibbons(dt);
   drawRipples(dt);
   drawSpectrum(bass);
@@ -364,6 +445,7 @@ function idleFrame(now) {
   const dt = Math.min(0.05, (now - last) / 1000) || 0; last = now;
   drawBackground(dt, 0.05);
   drawStars(dt, 0.05);
+  updateMeteors(dt); drawMeteors();
   requestAnimationFrame(idleFrame);
 }
 
