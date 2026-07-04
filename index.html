@@ -63,9 +63,14 @@
   .play:hover { transform: scale(1.07); box-shadow: 0 0 70px rgba(150,180,255,.85); }
   .play:disabled { opacity: .5; }
   .hint { color: rgba(200,215,255,.5); font-size: 13px; letter-spacing: 2px; }
+  /* 水印 */
+  #watermark { position: fixed; top: 18px; left: 22px; z-index: 9;
+    color: rgba(200,215,255,.5); font-size: 15px; font-weight: 700; letter-spacing: 3px;
+    pointer-events: none; text-shadow: 0 0 12px rgba(120,160,255,.4); }
 </style>
 </head>
 <body>
+<div id="watermark">震撼哥出品</div>
 <div id="stage">
   <canvas id="cv"></canvas>
 </div>
