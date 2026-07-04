@@ -634,7 +634,7 @@ document.addEventListener('click', (e) => {
   barTimer = setTimeout(() => bar.classList.remove('show'), 3200);
 });
 
-audio.addEventListener('ended', () => { running = false; playPause.textContent = '▶'; requestAnimationFrame(idleFrame); });
+audio.addEventListener('ended', () => { audio.currentTime = 0; audio.play(); });
 
 // 启动待机动画 + 载入歌词
 loadLyrics();
