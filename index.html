@@ -321,6 +321,8 @@ function updateBall(t, dt) {
   ball.y = seg.y0 + seg.v0 * localT + 0.5 * seg.g * localT * localT;
   // 自转 (依据水平方向)
   ball.spin += (seg.x1 - seg.x0) * dt * 0.02;
+  // 飞行途中不断洒出拖尾粒子
+  if (t >= seg.t0 && t < seg.t1) spawnTrail(ball.x, ball.y);
 
   // 到达撞击时间 -> 触发撞击并进入下一段
   if (t >= seg.t1 && ball.target < keys.length) {
@@ -358,7 +360,45 @@ function sy(wy){ return wy - cam.y; }
 // ---------- 撞击特效 ----------
 const particles = [];
 const rings = [];
+const trailParts = [];       // 跳跃飞行时不断洒出的拖尾粒子
 const fx = { shake: 0 };
+
+let trailHue = 30;
+function spawnTrail(wx, wy) {
+  trailHue = (trailHue + 7) % 360;
+  const n = 2;
+  for (let i = 0; i < n; i++) {
+    trailParts.push({
+      x: wx + (Math.random()-0.5)*ball.r*0.8,
+      y: wy + (Math.random()-0.5)*ball.r*0.8,
+      vx: (Math.random()-0.5)*40,
+      vy: (Math.random()-0.5)*40 + 20,
+      life: 0.45 + Math.random()*0.35, t: 0,
+      r: ball.r * (0.28 + Math.random()*0.32),
+      hue: trailHue + Math.random()*40,
+    });
+  }
+}
+function updateTrail(dt) {
+  for (const p of trailParts) { p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 60*dt; }
+  for (let i=trailParts.length-1;i>=0;i--) if (trailParts[i].t > trailParts[i].life) trailParts.splice(i,1);
+}
+function drawTrail() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of trailParts) {
+    const pr = p.t / p.life;
+    const a = Math.max(0, 1 - pr);
+    const rr = p.r * (1 - pr*0.6);
+    const gx = sx(p.x), gy = sy(p.y);
+    const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, rr);
+    g.addColorStop(0, `hsla(${p.hue},100%,72%,${a})`);
+    g.addColorStop(1, `hsla(${p.hue},100%,60%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(gx, gy, rr, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
 function spawnHitFx(wx, wy, color) {
   for (let i = 0; i < 18; i++) {
     const ang = -Math.PI + Math.random() * Math.PI;   // 向上半圈
@@ -571,6 +611,7 @@ function loop(now) {
   updateBall(t, dt);
   updateCamera(dt, false);
   updateFx(dt);
+  updateTrail(dt);
   // 琴键闪光/文字衰减
   for (const k of keys) {
     if (k.flash > 0) k.flash = Math.max(0, k.flash - dt * 2.6);
@@ -583,6 +624,7 @@ function loop(now) {
   ctx.save();
   if (fx.shake > 0) ctx.translate((Math.random()-0.5)*fx.shake, (Math.random()-0.5)*fx.shake);
   drawKeys();
+  drawTrail();
   drawFx();
   drawBall();
   ctx.restore();
@@ -602,7 +644,7 @@ async function startShow() {
   document.getElementById('start-overlay').classList.add('hidden');
   document.getElementById('end-overlay').classList.add('hidden');
   audio.bass = audio.mid = audio.treble = audio.level = 0;
-  particles.length = 0; rings.length = 0; fx.shake = 0;
+  particles.length = 0; rings.length = 0; trailParts.length = 0; fx.shake = 0;
 
   const dur = isFinite(audioEl.duration) && audioEl.duration > 0 ? audioEl.duration : 230;
   buildImpacts(dur);
