@@ -179,6 +179,144 @@ function drawMeteors() {
   ctx.shadowBlur = 0; ctx.globalCompositeOperation = 'source-over';
 }
 
+// ---------- 宇宙星球 ----------
+// 大地的经纬块 (旋转时投影到球面, 形成自转的地球)
+const CONTINENTS = [
+  {u:0.05,v:-0.15,s:0.42},{u:0.12,v:0.25,s:0.30},{u:0.30,v:-0.35,s:0.26},
+  {u:0.40,v:0.10,s:0.40},{u:0.55,v:-0.05,s:0.34},{u:0.62,v:0.35,s:0.24},
+  {u:0.72,v:-0.30,s:0.30},{u:0.85,v:0.15,s:0.38},{u:0.92,v:-0.10,s:0.22}
+];
+const CLOUDS = [
+  {u:0.10,v:0.05,s:0.30},{u:0.28,v:-0.25,s:0.24},{u:0.48,v:0.30,s:0.28},
+  {u:0.66,v:-0.10,s:0.26},{u:0.80,v:0.20,s:0.22},{u:0.95,v:-0.30,s:0.20}
+];
+const planets = [
+  { type:'earth',  ax:0.82, ay:0.74, r:0.12, spin:0.05,  bob:0.5, rot:0 },
+  { type:'ringed', ax:0.16, ay:0.18, r:0.06, hue:42,     bob:0.35 },
+  { type:'plain',  ax:0.90, ay:0.16, r:0.034, hue:14,    bob:0.6 },   // 火星
+  { type:'plain',  ax:0.08, ay:0.82, r:0.028, hue:195,   bob:0.45 }   // 冰蓝
+];
+function updatePlanets(dt) {
+  for (const p of planets) if (p.type === 'earth') p.rot = (p.rot + dt * p.spin) % 1;
+}
+function planetPos(p) {
+  const t = performance.now() / 1000;
+  const R = Math.min(W, H);
+  return {
+    x: p.ax * W + Math.sin(t * 0.06 + p.ay * 9) * 10,
+    y: p.ay * H + Math.sin(t * 0.05 * p.bob + p.ax * 7) * 12,
+    r: p.r * R
+  };
+}
+function drawPlanets(dt, bass) {
+  for (const p of planets) {
+    const { x, y, r } = planetPos(p);
+    if (p.type === 'earth') drawEarth(x, y, r, p.rot, bass);
+    else drawPlanet(x, y, r, p.hue, p.type === 'ringed');
+  }
+}
+function drawPlanet(cx, cy, r, hue, ring) {
+  ctx.save();
+  if (ring) {
+    // 行星环
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(-0.5); ctx.scale(1, 0.32);
+    ctx.strokeStyle = `hsla(${hue},70%,72%,0.5)`; ctx.lineWidth = r * 0.18;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.7, 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = `hsla(${hue},70%,60%,0.3)`; ctx.lineWidth = r * 0.10;
+    ctx.beginPath(); ctx.arc(0, 0, r * 2.05, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+  // 球体 (受光渐变)
+  const g = ctx.createRadialGradient(cx - r*0.35, cy - r*0.35, r*0.1, cx, cy, r);
+  g.addColorStop(0, `hsl(${hue},70%,72%)`);
+  g.addColorStop(0.55, `hsl(${hue},65%,48%)`);
+  g.addColorStop(1, `hsl(${hue},60%,14%)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  // 大气微光
+  ctx.globalCompositeOperation = 'lighter';
+  const atm = ctx.createRadialGradient(cx, cy, r*0.85, cx, cy, r*1.25);
+  atm.addColorStop(0, `hsla(${hue},90%,70%,0.25)`);
+  atm.addColorStop(1, `hsla(${hue},90%,70%,0)`);
+  ctx.fillStyle = atm; ctx.beginPath(); ctx.arc(cx, cy, r*1.25, 0, Math.PI*2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
+}
+function drawEarth(cx, cy, r, rot, bass) {
+  ctx.save();
+  // 外层大气辉光
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(cx, cy, r*0.9, cx, cy, r*1.5);
+  halo.addColorStop(0, `hsla(205,95%,70%,${0.35 + bass*0.2})`);
+  halo.addColorStop(1, 'hsla(205,95%,70%,0)');
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx, cy, r*1.5, 0, Math.PI*2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+
+  // 裁剪到球面
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.clip();
+  // 海洋
+  const ocean = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.15, cx, cy, r);
+  ocean.addColorStop(0, '#3aa0ff');
+  ocean.addColorStop(0.6, '#1560c4');
+  ocean.addColorStop(1, '#062a63');
+  ctx.fillStyle = ocean; ctx.fillRect(cx - r, cy - r, r*2, r*2);
+  // 大陆 (投影到自转球面)
+  const drawBlobs = (list, front) => {
+    for (const c of list) {
+      const ang = (c.u + rot) * Math.PI * 2;
+      const depth = Math.cos(ang);
+      if (depth <= 0.05) continue;                 // 背面不画
+      const px = cx + Math.sin(ang) * r * 0.82;
+      const py = cy + c.v * r;
+      const sc = depth;                            // 边缘透视收缩
+      const rad = c.s * r * sc;
+      const edgeFade = Math.min(1, depth * 1.6);
+      front(px, py, rad, edgeFade);
+    }
+  };
+  // 陆地
+  drawBlobs(CONTINENTS, (px, py, rad, fade) => {
+    const g = ctx.createRadialGradient(px, py, 0, px, py, rad);
+    g.addColorStop(0, `rgba(84,170,84,${0.95*fade})`);
+    g.addColorStop(0.7, `rgba(58,132,66,${0.9*fade})`);
+    g.addColorStop(1, `rgba(120,110,60,0)`);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(px, py, rad, rad*0.78, 0, 0, Math.PI*2); ctx.fill();
+  });
+  // 云层 (稍快自转)
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const cloudRot = (rot * 1.3) % 1;
+  for (const c of CLOUDS) {
+    const ang = (c.u + cloudRot) * Math.PI * 2;
+    const depth = Math.cos(ang);
+    if (depth <= 0.05) continue;
+    const px = cx + Math.sin(ang) * r * 0.82;
+    const py = cy + c.v * r;
+    const rad = c.s * r * depth;
+    const g = ctx.createRadialGradient(px, py, 0, px, py, rad);
+    g.addColorStop(0, `rgba(255,255,255,${0.5*depth})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(px, py, rad, rad*0.6, 0, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+  // 昼夜: 阴影落在背光侧 (光来自左上)
+  const night = ctx.createRadialGradient(cx - r*0.5, cy - r*0.5, r*0.2, cx + r*0.5, cy + r*0.5, r*1.5);
+  night.addColorStop(0, 'rgba(0,0,10,0)');
+  night.addColorStop(0.55, 'rgba(0,0,12,0.15)');
+  night.addColorStop(1, 'rgba(0,0,15,0.82)');
+  ctx.fillStyle = night; ctx.fillRect(cx - r, cy - r, r*2, r*2);
+  ctx.restore(); // 结束裁剪
+
+  // 受光边缘高光
+  ctx.globalCompositeOperation = 'lighter';
+  const rim = ctx.createRadialGradient(cx - r*0.4, cy - r*0.4, r*0.6, cx - r*0.4, cy - r*0.4, r*1.05);
+  rim.addColorStop(0, 'rgba(180,220,255,0)');
+  rim.addColorStop(1, 'rgba(180,220,255,0.18)');
+  ctx.fillStyle = rim; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
+}
+
 // ---------- 节拍涟漪 ----------
 const ripples = [];
 let bassAvg = 0, beatCooldown = 0;
@@ -429,6 +567,7 @@ function frame(now) {
   drawBackground(dt, bass);
   drawStars(dt, bass);
   updateMeteors(dt); drawMeteors();
+  updatePlanets(dt); drawPlanets(dt, bass);
   drawRibbons(dt);
   drawRipples(dt);
   drawSpectrum(bass);
@@ -446,6 +585,7 @@ function idleFrame(now) {
   drawBackground(dt, 0.05);
   drawStars(dt, 0.05);
   updateMeteors(dt); drawMeteors();
+  updatePlanets(dt); drawPlanets(dt, 0.05);
   requestAnimationFrame(idleFrame);
 }
 
