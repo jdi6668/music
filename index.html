@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>小球坠落 · 节拍撞击 · 黑色毛衣</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+  body {
+    background: #05060d;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #wrap { position: relative; width: 100vw; height: 100vh; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  #hud {
+    position: absolute; top: 0; left: 0; width: 100%;
+    display: flex; justify-content: flex-end; align-items: flex-start;
+    padding: 18px 26px; pointer-events: none; z-index: 5;
+    color: #f0eaff; text-shadow: 0 2px 8px rgba(0,0,0,.6);
+  }
+  .hud-box { background: rgba(20,14,40,.42); border:1px solid rgba(170,140,255,.28);
+    backdrop-filter: blur(4px); border-radius: 14px; padding: 8px 16px; text-align:right; }
+  .hud-label { font-size: 11px; letter-spacing: 2px; opacity:.7; }
+  .hud-value { font-size: 22px; font-weight: 700; }
+
+  .overlay {
+    position: absolute; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 40%, rgba(40,26,80,.78), rgba(8,5,20,.96));
+    color: #f0eaff; text-align: center; gap: 22px;
+  }
+  .overlay.hidden { display: none; }
+  .title { font-size: 42px; font-weight: 800; letter-spacing: 4px;
+    background: linear-gradient(90deg,#ffd67a,#ff9ecb,#a98bff); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow: 0 0 30px rgba(255,158,203,.3); }
+  .subtitle { font-size: 15px; opacity: .8; max-width: 560px; line-height: 1.9; }
+  .btn {
+    pointer-events: auto; cursor: pointer;
+    padding: 14px 46px; font-size: 20px; font-weight: 700; letter-spacing: 2px;
+    color: #24123a; border: none; border-radius: 40px;
+    background: linear-gradient(135deg,#ffd67a,#ff9ecb);
+    box-shadow: 0 10px 30px rgba(255,158,203,.4); transition: transform .15s, box-shadow .15s;
+  }
+  .btn:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(255,158,203,.6); }
+  .hint { font-size: 12px; opacity: .55; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="scene"></canvas>
+
+  <div id="hud">
+    <div class="hud-box">
+      <div class="hud-label">TIME 时光</div>
+      <div class="hud-value" id="time-value">0:00</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="start-overlay">
+    <div class="title">小球坠落 · 节拍撞击</div>
+    <div class="subtitle">
+      小球从高处坠落，随着《黑色毛衣》的节拍逐一撞击琴键，<br>
+      撞击后弹开、再落向下一个琴键，歌词随撞击点亮。
+    </div>
+    <button class="btn" id="start-btn">开始</button>
+    <div class="hint">建议佩戴耳机 · 撞击点精确对齐节拍</div>
+  </div>
+
+  <div class="overlay hidden" id="end-overlay">
+    <div class="title">演奏结束</div>
+    <div class="subtitle" id="end-line">谢谢观看</div>
+    <button class="btn" id="restart-btn">再来一次</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   小球坠落 · 节拍撞击 · 黑色毛衣
+   预生成撞击时间轴(歌词逐字 + 间隙填充) -> 琴键沿路径向下铺排
+   -> 小球按音频时间做抛物线弹跳, 每次撞击精确落在节拍上
+   ============================================================ */
+
+// ---------- Canvas ----------
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- 小球贴图 ----------
+const headImg = new Image();
+let headLoaded = false;
+headImg.onload = () => { headLoaded = true; };
+headImg.src = 'head.jpg';
+
+// ---------- 音频 + 频谱 ----------
+let audioCtx, analyser, freqData, sourceNode, audioEl;
+function setupAudio() {
+  audioEl = new Audio('heisemaoyi.mp3');
+  audioEl.crossOrigin = 'anonymous';
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.7;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  sourceNode = audioCtx.createMediaElementSource(audioEl);
+  sourceNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+  audioEl.addEventListener('ended', endShow);
+}
+
+const audio = { bass: 0, mid: 0, treble: 0, level: 0 };
+function updateSpectrum(dt) {
+  if (!freqData) return;
+  analyser.getByteFrequencyData(freqData);
+  const n = freqData.length;
+  const be = Math.floor(n * 0.06), me = Math.floor(n * 0.35);
+  let b = 0, m = 0, tr = 0;
+  for (let i = 0; i < be; i++) b += freqData[i];
+  for (let i = be; i < me; i++) m += freqData[i];
+  for (let i = me; i < n; i++) tr += freqData[i];
+  b /= (be * 255) || 1; m /= ((me - be) * 255) || 1; tr /= ((n - me) * 255) || 1;
+  const k = Math.min(1, dt * 12);
+  audio.bass   += (b  - audio.bass) * k;
+  audio.mid    += (m  - audio.mid) * k;
+  audio.treble += (tr - audio.treble) * k;
+  audio.level = audio.bass * 0.6 + audio.mid * 0.3 + audio.treble * 0.1;
+}
+
+// 撞击音效 (合成短促 "叮")
+function playHitSound(strength) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'triangle';
+  const base = 520 + Math.random() * 220 + strength * 140;
+  osc.frequency.setValueAtTime(base, t);
+  osc.frequency.exponentialRampToValueAtTime(base * 0.5, t + 0.12);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.14 * (0.6 + strength), t + 0.006);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + 0.2);
+}
+
+// ---------- 歌词解析 -> 逐字时间点 ----------
+let charNotes = [];   // [{time, ch}]
+const LRC_SKIP = ['词：','曲：','编曲','制作人','制作','和声','混音','母带','监制',' - ','：Jay','演唱'];
+
+function parseLRC(text) {
+  const lines = text.split(/\r?\n/);
+  const timeTag = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
+  const raw = [];
+  for (const line of lines) {
+    const times = []; let m; timeTag.lastIndex = 0;
+    while ((m = timeTag.exec(line)) !== null) {
+      const min = parseInt(m[1],10), sec = parseInt(m[2],10);
+      const frac = m[3] ? parseInt(m[3].padEnd(3,'0'),10)/1000 : 0;
+      times.push(min*60 + sec + frac);
+    }
+    if (!times.length) continue;
+    const content = line.replace(timeTag,'').trim();
+    if (!content) continue;
+    if (LRC_SKIP.some(k => content.includes(k))) continue;
+    for (const t of times) raw.push([t, content]);
+  }
+  raw.sort((a,b) => a[0]-b[0]);
+  return raw;
+}
+
+function buildCharNotes(raw) {
+  charNotes.length = 0;
+  const punct = /[，。！？、,.!?；;：:\s（）()「」“”"']/;
+  for (let i = 0; i < raw.length; i++) {
+    const t = raw[i][0], text = raw[i][1];
+    const nextT = (i+1 < raw.length) ? raw[i+1][0] : t + 3;
+    const chars = Array.from(text).filter(c => !punct.test(c));
+    if (!chars.length) continue;
+    const dur = Math.max(0.4, Math.min(nextT - t, chars.length * 0.5));
+    const step = dur / chars.length;
+    chars.forEach((ch, j) => charNotes.push({ time: t + j*step, ch }));
+  }
+  charNotes.sort((a,b) => a.time - b.time);
+}
+
+async function loadLyrics() {
+  try {
+    const res = await fetch('heisemaoyi.lrc');
+    buildCharNotes(parseLRC(await res.text()));
+  } catch (e) { console.warn('歌词载入失败', e); charNotes = []; }
+}
+
+// ---------- 撞击时间轴: 歌词字 + 间隙填充节拍 ----------
+// impacts: [{time, ch}]  ch 为空表示纯节奏撞击(无歌词)
+let impacts = [];
+const FILL_STEP = 0.5;     // 间隙填充撞击的时间间隔(秒)
+const GAP_FILL  = 1.05;    // 超过此间隔就插入填充撞击
+
+function buildImpacts(songDur) {
+  impacts = [];
+  const notes = charNotes.slice();
+  const firstT = notes.length ? notes[0].time : 2;
+  // 前奏: 从 ~2s 开始铺填充撞击, 直到第一句歌词
+  for (let t = 2.0; t < firstT - 0.25; t += FILL_STEP) impacts.push({ time: t, ch: '' });
+  // 逐字撞击, 并在较大间隙里补填充撞击
+  for (let i = 0; i < notes.length; i++) {
+    impacts.push({ time: notes[i].time, ch: notes[i].ch });
+    const nextT = (i+1 < notes.length) ? notes[i+1].time : (songDur || notes[i].time + 4);
+    let gap = nextT - notes[i].time;
+    if (gap > GAP_FILL) {
+      for (let t = notes[i].time + FILL_STEP; t < nextT - 0.25; t += FILL_STEP)
+        impacts.push({ time: t, ch: '' });
+    }
+  }
+  impacts.sort((a,b) => a.time - b.time);
+}
+
+// ---------- 琴键 (沿蛇形路径向下铺排, 每个撞击点一个) ----------
+const KEY_COLORS = ['#ff7a9c','#ffb15a','#ffe14f','#8affc1','#5ad1ff','#a98bff','#ff9ecb'];
+const KEY_W = 118, KEY_H = 30;
+const X_STEP = 128;        // 相邻琴键水平位移
+const X_BAND = 300;        // 水平摆动范围(相对中心)
+let keys = [];             // {x, y, ang, color, ch, time, flash, appear}
+
+function buildKeys() {
+  keys = [];
+  let x = 0, y = 0, dir = 1, run = 0;
+  for (let i = 0; i < impacts.length; i++) {
+    const ang = dir * (0.16 + (i % 3) * 0.03);   // 轻微倾斜, 像琴键/散音条
+    keys.push({
+      x, y, ang,
+      color: KEY_COLORS[i % KEY_COLORS.length],
+      ch: impacts[i].ch, time: impacts[i].time,
+      flash: 0, appear: 0,
+    });
+    // 计算下一个键位置: 蛇形, 净向下
+    run++;
+    if (run >= 3) { dir *= -1; run = 0; }
+    let nx = x + dir * X_STEP;
+    if (nx > X_BAND)  { dir = -1; run = 0; nx = x + dir * X_STEP; }
+    if (nx < -X_BAND) { dir =  1; run = 0; nx = x + dir * X_STEP; }
+    x = nx;
+    y += 96 + (i % 4) * 12;    // 每键向下, 略有起伏
+  }
+}
+
+// ---------- 小球 (按音频时间做抛物线弹跳) ----------
+const ball = {
+  x: 0, y: 0, r: 22,
+  target: 0,           // 下一个要撞击的琴键索引
+  seg: null,           // 当前飞行段 {t0,t1,x0,y0,x1,y1,v0,g}
+  squash: 0,
+  spin: 0,
+  trail: [],
+};
+
+function keyTopY(k) { return k.y - KEY_H * 0.5 - ball.r + 4; }  // 键顶落点(小球中心)
+
+// 建立飞向 target 的抛物线段: t0..t1, 结束时精确落在 keys[target]
+function setupSegment(fromX, fromY, t0) {
+  const k = keys[ball.target];
+  const t1 = k.time;
+  const x1 = k.x, y1 = keyTopY(k);
+  const dt = Math.max(0.12, t1 - t0);
+  let v0, g;
+  if (ball.target === 0) {
+    // 首次: 从高处自由下落 (初速为0)
+    v0 = 0;
+    g = 2 * (y1 - fromY) / (dt * dt);
+  } else {
+    // 撞击后弹起再落下: 给一个向上初速(负值), 由终点反推重力
+    const up = Math.min(360, 110 + dt * 300);
+    v0 = -up;
+    g = 2 * (y1 - fromY - v0 * dt) / (dt * dt);
+    if (g <= 0) { v0 = 0; g = 2 * (y1 - fromY) / (dt * dt); }  // 兜底
+  }
+  ball.seg = { t0, t1, x0: fromX, y0: fromY, x1, y1, v0, g };
+}
+
+function initBall(t0) {
+  ball.target = 0;
+  const k0 = keys[0];
+  ball.x = k0.x;
+  ball.y = keyTopY(k0) - Math.max(H * 0.9, 700);   // 高高在上
+  ball.seg = null;
+  ball.squash = 0; ball.spin = 0; ball.trail.length = 0;
+  // 首段: 从 max(0, t0-1.2) 起自由下落至 key0
+  const startT = Math.max(0, keys[0].time - 1.2);
+  setupSegment(ball.x, ball.y, startT);
+}
+
+function onHit(idx) {
+  const k = keys[idx];
+  k.flash = 1;
+  if (k.ch) k.appear = 1;
+  ball.squash = 1;
+  const strength = 0.4 + audio.bass;
+  playHitSound(strength);
+  spawnHitFx(k.x, k.y - KEY_H * 0.5, k.color);
+  fx.shake = 5 + strength * 4;
+}
+
+function updateBall(t, dt) {
+  const seg = ball.seg;
+  if (!seg) return;
+  // 沿当前段插值
+  let p = (t - seg.t0);
+  const dur = seg.t1 - seg.t0;
+  if (p < 0) p = 0;
+  const localT = Math.min(p, dur);
+  ball.x = seg.x0 + (seg.x1 - seg.x0) * (dur > 0 ? localT / dur : 1);
+  ball.y = seg.y0 + seg.v0 * localT + 0.5 * seg.g * localT * localT;
+  // 自转 (依据水平方向)
+  ball.spin += (seg.x1 - seg.x0) * dt * 0.02;
+
+  // 到达撞击时间 -> 触发撞击并进入下一段
+  if (t >= seg.t1 && ball.target < keys.length) {
+    ball.x = seg.x1; ball.y = seg.y1;
+    onHit(ball.target);
+    const landedX = seg.x1, landedY = seg.y1;
+    ball.target++;
+    if (ball.target < keys.length) {
+      setupSegment(landedX, landedY, keys[ball.target - 1].time);
+    } else {
+      ball.seg = null;
+    }
+  }
+
+  // 拖尾
+  ball.trail.push({ x: ball.x, y: ball.y });
+  if (ball.trail.length > 14) ball.trail.shift();
+  // 压扁回弹
+  if (ball.squash > 0) ball.squash = Math.max(0, ball.squash - dt * 5);
+}
+
+// ---------- 摄像机 (跟随小球向下) ----------
+const cam = { x: 0, y: 0 };
+function updateCamera(dt, init) {
+  const targetY = ball.y - H * 0.40;
+  const targetX = ball.x - W * 0.5;
+  if (init) { cam.y = targetY; cam.x = targetX; return; }
+  const k = Math.min(1, dt * 4.5);
+  cam.y += (targetY - cam.y) * k;
+  cam.x += (targetX - cam.x) * k;
+}
+function sx(wx){ return wx - cam.x; }
+function sy(wy){ return wy - cam.y; }
+
+// ---------- 撞击特效 ----------
+const particles = [];
+const rings = [];
+const fx = { shake: 0 };
+function spawnHitFx(wx, wy, color) {
+  for (let i = 0; i < 18; i++) {
+    const ang = -Math.PI + Math.random() * Math.PI;   // 向上半圈
+    const spd = 90 + Math.random() * 240;
+    particles.push({ x: wx, y: wy, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
+      life: 0.4 + Math.random()*0.4, t: 0, r: 1.5 + Math.random()*3, color });
+  }
+  rings.push({ x: wx, y: wy, r: 4, max: 52, t: 0, life: 0.42, color });
+}
+function updateFx(dt) {
+  for (const p of particles) { p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 420*dt; }
+  for (let i=particles.length-1;i>=0;i--) if (particles[i].t>particles[i].life) particles.splice(i,1);
+  for (const r of rings) { r.t += dt; r.r += (r.max - r.r) * Math.min(1, dt*10); }
+  for (let i=rings.length-1;i>=0;i--) if (rings[i].t > rings[i].life) rings.splice(i,1);
+  if (fx.shake > 0) { fx.shake -= dt * 26; if (fx.shake < 0) fx.shake = 0; }
+}
+function drawFx() {
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, 1 - p.t/p.life);
+    ctx.beginPath(); ctx.arc(sx(p.x), sy(p.y), p.r, 0, Math.PI*2);
+    ctx.fillStyle = p.color; ctx.fill();
+  }
+  for (const r of rings) {
+    const pr = r.t / r.life;
+    ctx.globalAlpha = Math.max(0, 1 - pr) * 0.85;
+    ctx.beginPath(); ctx.arc(sx(r.x), sy(r.y), r.r, 0, Math.PI*2);
+    ctx.strokeStyle = '#fff2c8'; ctx.lineWidth = 3*(1-pr)+1;
+    ctx.shadowColor = r.color; ctx.shadowBlur = 14; ctx.stroke();
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+}
+
+// ---------- 绘制琴键 ----------
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r);
+  ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);
+  ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+function shade(hex, amt) {
+  const c = hex.replace('#','');
+  let r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+  r = Math.max(0, Math.min(255, Math.round(r + 255*amt)));
+  g = Math.max(0, Math.min(255, Math.round(g + 255*amt)));
+  b = Math.max(0, Math.min(255, Math.round(b + 255*amt)));
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawKeys() {
+  for (const k of keys) {
+    const scy = sy(k.y);
+    if (scy < -140 || scy > H + 160) continue;
+    const scx = sx(k.x);
+    const fl = k.flash;
+    ctx.save();
+    ctx.translate(scx, scy);
+    ctx.rotate(k.ang);
+    // 阴影/侧面 (伪3D)
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(-KEY_W/2 + 5, -KEY_H/2 + 6, KEY_W, KEY_H, 10); ctx.fill();
+    // 键面渐变
+    const g = ctx.createLinearGradient(0, -KEY_H/2, 0, KEY_H/2);
+    g.addColorStop(0, shade(k.color, 0.28 + fl*0.5));
+    g.addColorStop(1, shade(k.color, -0.12 + fl*0.3));
+    ctx.fillStyle = g;
+    ctx.shadowColor = fl > 0 ? '#ffffff' : k.color;
+    ctx.shadowBlur = 10 + fl * 40;
+    roundRect(-KEY_W/2, -KEY_H/2, KEY_W, KEY_H, 10); ctx.fill();
+    ctx.shadowBlur = 0;
+    // 高光条
+    ctx.globalAlpha = 0.5 + fl*0.4;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    roundRect(-KEY_W/2 + 8, -KEY_H/2 + 4, KEY_W - 16, 4, 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // 撞击白闪覆盖
+    if (fl > 0) {
+      ctx.globalAlpha = fl * 0.6;
+      ctx.fillStyle = '#ffffff';
+      roundRect(-KEY_W/2, -KEY_H/2, KEY_W, KEY_H, 10); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+
+    // 歌词字 (键上方浮现, 出现时从大变小)
+    if (k.ch) {
+      const pop = k.appear;
+      const tscale = 1 + pop * 1.4;
+      const fsize = 27 * tscale;
+      const cx = scx, cy = scy - (KEY_H * 0.5 + 26);
+      ctx.font = '700 ' + fsize.toFixed(1) + 'px "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const lit = Math.max(0, 1 - (audioEl.currentTime - k.time)) * (k.appear > 0 ? 1 : 0.35);
+      ctx.shadowColor = k.color; ctx.shadowBlur = 12 + pop * 22 + lit * 14;
+      ctx.fillStyle = k.appear > 0 || audioEl.currentTime > k.time ? '#fff6e6' : 'rgba(255,246,230,0.5)';
+      ctx.fillText(k.ch, cx, cy);
+      ctx.shadowBlur = 0;
+    }
+  }
+}
+
+// ---------- 绘制小球 ----------
+function drawBall() {
+  // 拖尾
+  for (let i = 0; i < ball.trail.length; i++) {
+    const tr = ball.trail[i];
+    const a = (i / ball.trail.length) * 0.4;
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.arc(sx(tr.x), sy(tr.y), ball.r * (0.4 + i/ball.trail.length*0.5), 0, Math.PI*2);
+    ctx.fillStyle = '#ffd6f0'; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const x = sx(ball.x), y = sy(ball.y);
+  const sq = ball.squash;
+  const rx = ball.r * (1 + sq * 0.35);
+  const ry = ball.r * (1 - sq * 0.35);
+  ctx.save();
+  ctx.translate(x, y);
+  // 光晕
+  ctx.beginPath();
+  const hg = ctx.createRadialGradient(0, 0, ball.r*0.3, 0, 0, ball.r*2.2);
+  hg.addColorStop(0, 'rgba(255,220,255,0.5)');
+  hg.addColorStop(1, 'rgba(255,220,255,0)');
+  ctx.fillStyle = hg; ctx.arc(0, 0, ball.r*2.2, 0, Math.PI*2); ctx.fill();
+
+  ctx.rotate(ball.spin);
+  ctx.scale(rx/ball.r, ry/ball.r);
+  // 裁剪圆形贴图
+  ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI*2); ctx.closePath();
+  if (headLoaded) {
+    ctx.save(); ctx.clip();
+    ctx.drawImage(headImg, -ball.r, -ball.r, ball.r*2, ball.r*2);
+    ctx.restore();
+  } else {
+    const g = ctx.createLinearGradient(-ball.r, -ball.r, ball.r, ball.r);
+    g.addColorStop(0, '#ffd67a'); g.addColorStop(0.5, '#ff9ecb'); g.addColorStop(1, '#a98bff');
+    ctx.fillStyle = g; ctx.fill();
+  }
+  // 描边 + 高光
+  ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(255,245,230,0.95)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(-ball.r*0.32, -ball.r*0.34, ball.r*0.2, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fill();
+  ctx.restore();
+}
+
+// ---------- 背景 ----------
+const motes = [];
+function seedMotes(){ motes.length=0; for(let i=0;i<70;i++) motes.push(makeMote(Math.random()*H)); }
+function makeMote(y){ const d=Math.random(); return { x:Math.random()*W, y, r:0.6+d*2.2, v:6+d*22, a:0.05+d*0.2, ph:Math.random()*6.28, drift:(Math.random()-0.5)*0.6 }; }
+let bgT = 0;
+function drawBackground(dt) {
+  bgT += dt;
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#141026');
+  bg.addColorStop(0.5, '#1a1636');
+  bg.addColorStop(1, '#080615');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const pulse = 0.05 + audio.bass * 0.7;
+  const rad = W * (0.4 + audio.bass * 0.3);
+  const rg = ctx.createRadialGradient(W/2, H*0.42, 30, W/2, H*0.42, rad);
+  rg.addColorStop(0, `rgba(180,140,255,${pulse})`);
+  rg.addColorStop(0.5, `rgba(255,140,200,${pulse*0.4})`);
+  rg.addColorStop(1, 'rgba(120,90,200,0)');
+  ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+  // 斜向光带 (呼应参考图的斜纹背光)
+  const rayA = 0.03 + audio.treble * 0.16;
+  ctx.strokeStyle = `rgba(150,170,255,${rayA})`;
+  ctx.lineWidth = 40;
+  for (let i = -2; i < 8; i++) {
+    const ox = i * 140 + (bgT*10 % 140);
+    ctx.beginPath(); ctx.moveTo(ox, -50); ctx.lineTo(ox + H*0.7, H+50); ctx.stroke();
+  }
+  ctx.restore();
+
+  if (!motes.length) seedMotes();
+  const spd = 1 + audio.level * 2.2;
+  for (const m of motes) {
+    m.y -= m.v*dt*spd; m.ph += dt; m.x += Math.sin(m.ph)*m.drift;
+    if (m.y < -4) Object.assign(m, makeMote(H+4));
+    ctx.globalAlpha = m.a * (0.6 + audio.level);
+    ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
+    ctx.fillStyle = '#e6d8ff'; ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function drawVignette() {
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.35, W/2, H/2, H*0.9);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(3,2,10,0.6)');
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, W, H);
+}
+
+// ---------- 主循环 ----------
+const state = { running:false, lastFrame:0 };
+function loop(now) {
+  if (!state.running) return;
+  const dt = Math.min(0.05, (now - state.lastFrame)/1000) || 0;
+  state.lastFrame = now;
+  const t = audioEl.currentTime;
+
+  updateSpectrum(dt);
+  updateBall(t, dt);
+  updateCamera(dt, false);
+  updateFx(dt);
+  // 琴键闪光/文字衰减
+  for (const k of keys) {
+    if (k.flash > 0) k.flash = Math.max(0, k.flash - dt * 2.6);
+    if (k.appear > 0) k.appear = Math.max(0, k.appear - dt * 2.4);
+  }
+
+  ctx.clearRect(0, 0, W, H);
+  drawBackground(dt);
+
+  ctx.save();
+  if (fx.shake > 0) ctx.translate((Math.random()-0.5)*fx.shake, (Math.random()-0.5)*fx.shake);
+  drawKeys();
+  drawFx();
+  drawBall();
+  ctx.restore();
+
+  drawVignette();
+  document.getElementById('time-value').textContent = fmtTime(t);
+  requestAnimationFrame(loop);
+}
+function fmtTime(s){ const m=Math.floor(s/60), ss=Math.floor(s%60); return m+':'+String(ss).padStart(2,'0'); }
+
+// ---------- 开始 / 结束 ----------
+async function startShow() {
+  if (!audioCtx) setupAudio();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+  if (!charNotes.length) await loadLyrics();
+
+  document.getElementById('start-overlay').classList.add('hidden');
+  document.getElementById('end-overlay').classList.add('hidden');
+  audio.bass = audio.mid = audio.treble = audio.level = 0;
+  particles.length = 0; rings.length = 0; fx.shake = 0;
+
+  const dur = isFinite(audioEl.duration) && audioEl.duration > 0 ? audioEl.duration : 230;
+  buildImpacts(dur);
+  buildKeys();
+  initBall(0);
+  updateCamera(0, true);
+
+  state.running = true;
+  audioEl.currentTime = 0;
+  try { await audioEl.play(); } catch(e){ console.warn('播放失败', e); }
+  state.lastFrame = performance.now();
+  requestAnimationFrame(loop);
+}
+function endShow() {
+  state.running = false;
+  document.getElementById('end-overlay').classList.remove('hidden');
+}
+
+document.getElementById('start-btn').addEventListener('click', startShow);
+document.getElementById('restart-btn').addEventListener('click', startShow);
+</script>
+</body>
+</html>
