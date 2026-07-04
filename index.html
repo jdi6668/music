@@ -106,6 +106,7 @@ let audioCtx, analyser, freqData, sourceNode, audioEl;
 function setupAudio() {
   audioEl = new Audio('heisemaoyi.mp3');
   audioEl.crossOrigin = 'anonymous';
+  audioEl.preload = 'auto';
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 1024;
@@ -304,7 +305,6 @@ function onHit(idx) {
   if (k.ch) k.appear = 1;
   ball.squash = 1;
   const strength = 0.4 + audio.bass;
-  playHitSound(strength);
   spawnHitFx(k.x, k.y - KEY_H * 0.5, k.color);
   fx.shake = 5 + strength * 4;
 }
@@ -488,7 +488,7 @@ function drawKeys() {
     // 歌词字 (键上方浮现, 出现时从大变小)
     if (k.ch) {
       const pop = k.appear;
-      const tscale = 1 + pop * 1.4;
+      const tscale = 1 + pop * 3.8;     // 撞击瞬间约为常态的 2 倍(更大), 之后慢慢收缩
       const fsize = 27 * tscale;
       const cx = scx, cy = scy - (KEY_H * 0.5 + 26);
       ctx.font = '700 ' + fsize.toFixed(1) + 'px "Microsoft YaHei", sans-serif';
@@ -615,7 +615,7 @@ function loop(now) {
   // 琴键闪光/文字衰减
   for (const k of keys) {
     if (k.flash > 0) k.flash = Math.max(0, k.flash - dt * 2.6);
-    if (k.appear > 0) k.appear = Math.max(0, k.appear - dt * 2.4);
+    if (k.appear > 0) k.appear = Math.max(0, k.appear - dt * 1.5);   // 放大后慢慢缩小
   }
 
   ctx.clearRect(0, 0, W, H);
@@ -635,11 +635,39 @@ function loop(now) {
 }
 function fmtTime(s){ const m=Math.floor(s/60), ss=Math.floor(s%60); return m+':'+String(ss).padStart(2,'0'); }
 
+// 等待 mp3 加载到可以完整播放为止
+function waitForAudioReady() {
+  return new Promise((resolve) => {
+    if (audioEl.readyState >= 4) { resolve(); return; }  // HAVE_ENOUGH_DATA
+    const done = () => {
+      audioEl.removeEventListener('canplaythrough', done);
+      audioEl.removeEventListener('error', done);
+      resolve();
+    };
+    audioEl.addEventListener('canplaythrough', done, { once: true });
+    audioEl.addEventListener('error', done, { once: true });
+    audioEl.load();
+  });
+}
+
 // ---------- 开始 / 结束 ----------
+let starting = false;
 async function startShow() {
+  if (starting) return;
+  starting = true;
   if (!audioCtx) setupAudio();
   if (audioCtx.state === 'suspended') await audioCtx.resume();
   if (!charNotes.length) await loadLyrics();
+
+  // 先显示加载状态, 等 mp3 完全就绪再开始计时/播放
+  const startBtn = document.getElementById('start-btn');
+  const restartBtn = document.getElementById('restart-btn');
+  const prevStart = startBtn.textContent, prevRestart = restartBtn.textContent;
+  startBtn.textContent = restartBtn.textContent = '加载中…';
+  startBtn.disabled = restartBtn.disabled = true;
+  await waitForAudioReady();
+  startBtn.textContent = prevStart; restartBtn.textContent = prevRestart;
+  startBtn.disabled = restartBtn.disabled = false;
 
   document.getElementById('start-overlay').classList.add('hidden');
   document.getElementById('end-overlay').classList.add('hidden');
@@ -651,11 +679,13 @@ async function startShow() {
   initBall(0);
   updateCamera(0, true);
 
-  state.running = true;
   audioEl.currentTime = 0;
   try { await audioEl.play(); } catch(e){ console.warn('播放失败', e); }
+  // mp3 就绪并开始播放后, 才启动计时与主循环
+  state.running = true;
   state.lastFrame = performance.now();
   requestAnimationFrame(loop);
+  starting = false;
 }
 function endShow() {
   state.running = false;
