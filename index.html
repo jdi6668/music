@@ -117,6 +117,23 @@
     background: #6bd6ff; cursor: pointer; box-shadow: 0 0 6px rgba(107,214,255,0.4);
   }
 
+  /* 歌词 */
+  #lyric {
+    position: fixed; left: 0; right: 0; bottom: 14%; text-align: center;
+    color: #e8ecff; font-size: clamp(20px, 4.5vw, 38px); font-weight: 600; letter-spacing: 3px;
+    padding: 0 24px; z-index: 6; pointer-events: none;
+    opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(5px);
+    transition: opacity 0.9s ease, transform 0.9s ease, filter 0.9s ease;
+    text-shadow: 0 0 22px rgba(140,170,240,0.5), 0 0 50px rgba(120,100,200,0.3);
+  }
+  #lyric.show { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  #lyricNext {
+    position: fixed; left: 0; right: 0; bottom: 7%; text-align: center;
+    color: rgba(200,215,255,0.35); font-size: clamp(13px, 2.8vw, 19px); letter-spacing: 2px;
+    padding: 0 24px; z-index: 6; pointer-events: none;
+    transition: opacity 0.7s ease;
+  }
+
   /* 唤出提示 */
   #hint {
     position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -146,14 +163,17 @@
   </div>
 </div>
 
+<div id="lyricNext"></div>
+<div id="lyric"></div>
+
 <div id="hint">点 击 空 白 处 唤 出 播 放 器</div>
 
-<audio id="audio" preload="auto" src="heisemaoyi.mp3"></audio>
+<audio id="audio" preload="auto" src="heisemaoyi.mp3" crossorigin="anonymous"></audio>
 
 <script>
 /* ============================================================
    星空夜语 —— 助眠音乐播放器
-   流星雨背景 · 闪烁星空 · 月光 · 萤火虫
+   流星雨背景 (随旋律律动) · 闪烁星空 · 月光 · 萤火虫 · 歌词
    ============================================================ */
 const canvas = document.getElementById('cv');
 const ctx = canvas.getContext('2d');
@@ -188,33 +208,87 @@ function initStars() {
 initStars();
 addEventListener('resize', initStars);
 
-/* ---- 流星 ---- */
+/* ---- 音频分析 ---- */
+const audioEl = document.getElementById('audio');
+let actx, analyser, freqData, timeData, srcNode;
+let audioReady = false;
+
+function setupAudio() {
+  if (audioReady) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = actx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.8;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  timeData = new Uint8Array(analyser.fftSize);
+  srcNode = actx.createMediaElementSource(audioEl);
+  srcNode.connect(analyser);
+  analyser.connect(actx.destination);
+  audioReady = true;
+}
+
+function getEnergy() {
+  if (!audioReady || audioEl.paused) return { bass: 0, mid: 0, treble: 0, overall: 0 };
+  analyser.getByteFrequencyData(freqData);
+  const bins = analyser.frequencyBinCount;
+  let bass = 0, mid = 0, treble = 0;
+  const bassEnd = Math.floor(bins * 0.08);
+  const midEnd = Math.floor(bins * 0.3);
+  for (let i = 0; i < bassEnd; i++) bass += freqData[i];
+  for (let i = bassEnd; i < midEnd; i++) mid += freqData[i];
+  for (let i = midEnd; i < bins; i++) treble += freqData[i];
+  bass = bass / (bassEnd * 255);
+  mid = mid / ((midEnd - bassEnd) * 255);
+  treble = treble / ((bins - midEnd) * 255);
+  return { bass, mid, treble, overall: (bass + mid + treble) / 3 };
+}
+
+/* ---- 流星 (随旋律律动) ---- */
 const meteors = [];
 let meteorTimer = 0;
+let smoothBass = 0, smoothMid = 0, smoothTreble = 0;
 
-function spawnMeteor() {
+function spawnMeteor(energy) {
   const fromLeft = Math.random() < 0.6;
-  const startY = Math.random() * H * 0.4;
-  const speed = 280 + Math.random() * 200;
-  const angle = 0.35 + Math.random() * 0.15;
+  const startY = Math.random() * H * 0.45;
+  // 速度随整体能量变化: 安静时慢, 高潮时快
+  const baseSpeed = 180 + energy.overall * 520 + energy.bass * 200;
+  const speed = baseSpeed + Math.random() * 80;
+  const angle = 0.3 + Math.random() * 0.2;
+  // 大小随低频和中频变化
+  const width = 0.8 + energy.bass * 3.5 + energy.mid * 1.5 + Math.random() * 0.6;
+  const len = 70 + energy.overall * 200 + energy.treble * 120 + Math.random() * 60;
+  // 色相随频段变化: 低频偏蓝紫, 高频偏白金
+  const hue = 200 + energy.mid * 80 + energy.treble * 60 + Math.random() * 30;
   meteors.push({
     x: fromLeft ? -80 : W + 80,
     y: startY,
     vx: (fromLeft ? 1 : -1) * speed * Math.cos(angle),
     vy: speed * Math.sin(angle),
     life: 0,
-    max: 1.8 + Math.random() * 1.2,
-    len: 100 + Math.random() * 120,
-    hue: 200 + Math.random() * 60,
-    width: 1.2 + Math.random() * 1.0
+    max: 1.5 + Math.random() * 1.5 + energy.overall * 0.8,
+    len: len,
+    hue: hue,
+    width: width,
+    brightness: 0.5 + energy.overall * 0.5
   });
 }
 
-function updateMeteors(dt) {
+function updateMeteors(dt, energy) {
+  // 平滑能量值
+  smoothBass += (energy.bass - smoothBass) * 0.15;
+  smoothMid += (energy.mid - smoothMid) * 0.15;
+  smoothTreble += (energy.treble - smoothTreble) * 0.15;
+
   meteorTimer -= dt;
+  // 生成频率随能量变化: 安静时稀疏, 高潮时密集
+  const spawnInterval = Math.max(0.15, 2.8 - energy.overall * 2.5 - energy.bass * 1.0);
   if (meteorTimer <= 0) {
-    spawnMeteor();
-    meteorTimer = 1.5 + Math.random() * 3.5;
+    spawnMeteor(energy);
+    // 高能量时可能一次生成多颗
+    if (energy.overall > 0.5 && Math.random() < energy.overall * 0.6) spawnMeteor(energy);
+    if (energy.bass > 0.6 && Math.random() < 0.3) spawnMeteor(energy);
+    meteorTimer = spawnInterval + Math.random() * 0.5;
   }
   for (const m of meteors) {
     m.x += m.vx * dt;
@@ -230,27 +304,27 @@ function drawMeteors() {
   ctx.globalCompositeOperation = 'lighter';
   for (const m of meteors) {
     const p = m.life / m.max;
-    const a = Math.sin(Math.min(1, p) * Math.PI) * 0.8;
+    const a = Math.sin(Math.min(1, p) * Math.PI) * (0.6 + m.brightness * 0.4);
     const ang = Math.atan2(m.vy, m.vx);
     const tx = m.x - Math.cos(ang) * m.len;
     const ty = m.y - Math.sin(ang) * m.len;
     const g = ctx.createLinearGradient(m.x, m.y, tx, ty);
-    g.addColorStop(0, `hsla(${m.hue}, 90%, 85%, ${a})`);
-    g.addColorStop(0.4, `hsla(${m.hue}, 80%, 70%, ${a * 0.4})`);
+    g.addColorStop(0, `hsla(${m.hue}, 90%, 88%, ${a})`);
+    g.addColorStop(0.3, `hsla(${m.hue}, 85%, 75%, ${a * 0.5})`);
     g.addColorStop(1, `hsla(${m.hue}, 80%, 60%, 0)`);
     ctx.strokeStyle = g;
     ctx.lineWidth = m.width;
     ctx.lineCap = 'round';
-    ctx.shadowColor = `hsl(${m.hue}, 90%, 75%)`;
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = `hsl(${m.hue}, 90%, 78%)`;
+    ctx.shadowBlur = 8 + m.width * 4;
     ctx.beginPath();
     ctx.moveTo(m.x, m.y);
     ctx.lineTo(tx, ty);
     ctx.stroke();
     // 头部亮点
     ctx.beginPath();
-    ctx.arc(m.x, m.y, m.width * 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${m.hue}, 100%, 92%, ${a})`;
+    ctx.arc(m.x, m.y, m.width * 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${m.hue}, 100%, 93%, ${a})`;
     ctx.fill();
   }
   ctx.shadowBlur = 0;
@@ -418,17 +492,57 @@ function drawStars(dt) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+/* ---- 歌词 ---- */
+let lyrics = [], curLyric = -1;
+const lyricEl = document.getElementById('lyric');
+const lyricNextEl = document.getElementById('lyricNext');
+
+async function loadLyrics() {
+  try {
+    const text = await (await fetch('heisemaoyi.lrc')).text();
+    const skip = ['词：', '曲：', '编曲', '制作', '人：', '和声', '混音', '母带', '监制'];
+    const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)/;
+    lyrics = text.split(/\r?\n/).map(l => {
+      const m = l.match(re); if (!m) return null;
+      const t = m[4].trim(); if (!t || skip.some(s => t.includes(s))) return null;
+      const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+      return { time: +m[1] * 60 + +m[2] + frac, text: t };
+    }).filter(Boolean).sort((a, b) => a.time - b.time);
+  } catch (e) { lyrics = []; }
+}
+
+function updateLyrics(t) {
+  if (!lyrics.length) return;
+  let idx = -1;
+  for (let i = 0; i < lyrics.length; i++) {
+    if (t >= lyrics[i].time) idx = i; else break;
+  }
+  if (idx !== curLyric) {
+    curLyric = idx;
+    lyricEl.classList.remove('show');
+    setTimeout(() => {
+      lyricEl.textContent = idx >= 0 ? lyrics[idx].text : '';
+      lyricNextEl.textContent = (idx + 1 < lyrics.length) ? lyrics[idx + 1].text : '';
+      if (idx >= 0) lyricEl.classList.add('show');
+    }, 100);
+  }
+}
+
+loadLyrics();
+
 /* ---- 主循环 ---- */
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000) || 0;
   last = now;
+  const energy = getEnergy();
   drawBackground();
   drawMoon();
   drawStars(dt);
   drawFireflies(dt);
-  updateMeteors(dt);
+  updateMeteors(dt, energy);
   drawMeteors();
+  updateLyrics(audioEl.currentTime);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -459,6 +573,8 @@ function fmt(s) {
 
 function togglePlay() {
   if (audio.paused) {
+    if (!audioReady) setupAudio();
+    if (actx && actx.state === 'suspended') actx.resume();
     audio.play().catch(e => console.warn(e));
   } else {
     audio.pause();
