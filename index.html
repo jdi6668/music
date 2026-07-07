@@ -384,23 +384,35 @@ function drawFireflies(dt) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-/* ---- 月亮 ---- */
-function drawMoon() {
-  const mx = W * 0.82, my = H * 0.18;
-  const mr = Math.min(W, H) * 0.05;
-  // 外层光晕
+/* ---- 月亮 (缓慢漂移 + 旋律呼吸) ---- */
+let moonAngle = 0;
+function drawMoon(energy) {
+  const t = performance.now() / 1000;
+  // 缓慢沿弧线漂移: 从右上缓缓移向中上再回来
+  moonAngle += 0.0003;
+  const driftX = Math.cos(t * 0.03) * W * 0.06;
+  const driftY = Math.sin(t * 0.025) * H * 0.04;
+  const mx = W * 0.82 + driftX;
+  const my = H * 0.18 + driftY;
+  // 大小随低频呼吸
+  const mr = Math.min(W, H) * (0.05 + energy.bass * 0.015);
+  // 光晕亮度随旋律脉动
+  const haloAlpha = 0.12 + energy.mid * 0.12 + energy.bass * 0.08;
   ctx.globalCompositeOperation = 'lighter';
-  const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 4);
-  halo.addColorStop(0, 'rgba(230, 235, 255, 0.15)');
-  halo.addColorStop(0.5, 'rgba(200, 215, 255, 0.05)');
+  const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * (4 + energy.overall * 1.5));
+  halo.addColorStop(0, `rgba(230, 235, 255, ${haloAlpha})`);
+  halo.addColorStop(0.5, `rgba(200, 215, 255, ${haloAlpha * 0.35})`);
   halo.addColorStop(1, 'rgba(180, 200, 240, 0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(mx, my, mr * 4, 0, Math.PI * 2);
+  ctx.arc(mx, my, mr * (4 + energy.overall * 1.5), 0, Math.PI * 2);
   ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
-  // 月球本体
-  const g = ctx.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
+  // 月球本体 (自转: 光源角度缓慢旋转)
+  const lightAng = t * 0.08;
+  const lx = mx - mr * 0.3 * Math.cos(lightAng);
+  const ly = my - mr * 0.3 * Math.sin(lightAng);
+  const g = ctx.createRadialGradient(lx, ly, mr * 0.1, mx, my, mr);
   g.addColorStop(0, '#f0f4ff');
   g.addColorStop(0.6, '#d0d8ee');
   g.addColorStop(1, '#a0aac8');
@@ -408,11 +420,15 @@ function drawMoon() {
   ctx.beginPath();
   ctx.arc(mx, my, mr, 0, Math.PI * 2);
   ctx.fill();
-  // 环形山
+  // 环形山 (随自转旋转)
+  ctx.save();
+  ctx.translate(mx, my);
+  ctx.rotate(t * 0.06);
   ctx.fillStyle = 'rgba(150, 160, 190, 0.2)';
-  ctx.beginPath(); ctx.arc(mx + mr * 0.2, my - mr * 0.1, mr * 0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(mx - mr * 0.15, my + mr * 0.25, mr * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(mx + mr * 0.35, my + mr * 0.15, mr * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mr * 0.2, -mr * 0.1, mr * 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-mr * 0.15, mr * 0.25, mr * 0.1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mr * 0.35, mr * 0.15, mr * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 
 /* ---- 背景 ---- */
@@ -537,7 +553,7 @@ function frame(now) {
   last = now;
   const energy = getEnergy();
   drawBackground();
-  drawMoon();
+  drawMoon(energy);
   drawStars(dt);
   drawFireflies(dt);
   updateMeteors(dt, energy);
