@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>星空夜语 · 助眠音乐</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #02030a;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  /* ---- 播放器卡片 ---- */
+  #player {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 340px; padding: 36px 32px 30px; z-index: 10; text-align: center;
+    background: rgba(10, 14, 30, 0.45);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(140, 170, 230, 0.12);
+    border-radius: 24px;
+    box-shadow: 0 8px 60px rgba(20, 30, 60, 0.4), 0 0 80px rgba(80, 100, 180, 0.08);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  #player.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.95); }
+
+  /* 唱片 */
+  #disc {
+    width: 160px; height: 160px; border-radius: 50%; margin: 0 auto 24px;
+    background: conic-gradient(from 0deg, #1a1a2e, #16213e, #0f3460, #1a1a2e);
+    position: relative;
+    box-shadow: 0 0 30px rgba(80, 100, 180, 0.2), inset 0 0 20px rgba(0,0,0,0.6);
+    animation: spin 20s linear infinite;
+    animation-play-state: paused;
+  }
+  #disc.playing { animation-play-state: running; }
+  #disc::before {
+    content: ''; position: absolute; inset: 30px; border-radius: 50%;
+    background: radial-gradient(circle, #2a2a4e 0%, #1a1a3e 60%, #0a0a1e 100%);
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+  }
+  #disc::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #6bd6ff; transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px rgba(107, 214, 255, 0.6);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .song-title {
+    color: #e0e8ff; font-size: 18px; font-weight: 600; letter-spacing: 2px;
+    margin-bottom: 4px; text-shadow: 0 0 20px rgba(100, 130, 200, 0.3);
+  }
+  .song-sub {
+    color: rgba(180, 200, 240, 0.4); font-size: 12px; letter-spacing: 3px;
+    margin-bottom: 22px;
+  }
+
+  /* 进度条 */
+  #track {
+    width: 100%; height: 4px; background: rgba(100, 120, 180, 0.15);
+    border-radius: 4px; overflow: hidden; cursor: pointer; margin-bottom: 8px;
+  }
+  #fill {
+    height: 100%; width: 0%; border-radius: 4px;
+    background: linear-gradient(90deg, #4a8fd6, #7b6cc4);
+    box-shadow: 0 0 8px rgba(100, 130, 200, 0.4);
+    transition: width 0.15s linear;
+  }
+  #times {
+    display: flex; justify-content: space-between;
+    color: rgba(180, 200, 240, 0.35); font-size: 11px; letter-spacing: 1px;
+    margin-bottom: 22px;
+  }
+
+  /* 控制按钮 */
+  #controls {
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+  }
+  .ctrl-btn {
+    width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(60, 80, 140, 0.15); color: rgba(200, 220, 255, 0.6);
+    font-size: 16px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.25s ease;
+  }
+  .ctrl-btn:hover {
+    background: rgba(80, 110, 180, 0.25); color: #d0dcff;
+    transform: scale(1.08);
+  }
+  #playBtn {
+    width: 60px; height: 60px; font-size: 22px;
+    background: linear-gradient(135deg, #4a8fd6, #7b6cc4);
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(80, 110, 180, 0.3);
+  }
+  #playBtn:hover {
+    background: linear-gradient(135deg, #5a9fe6, #8b7cd4);
+    box-shadow: 0 4px 32px rgba(100, 130, 200, 0.45);
+    transform: scale(1.06);
+  }
+
+  /* 音量 */
+  #volWrap {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 18px; justify-content: center;
+  }
+  #volIcon { color: rgba(180, 200, 240, 0.35); font-size: 14px; }
+  #vol {
+    width: 80px; height: 3px; -webkit-appearance: none; appearance: none;
+    background: rgba(100, 120, 180, 0.15); border-radius: 3px; outline: none;
+  }
+  #vol::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: #6bd6ff; cursor: pointer; box-shadow: 0 0 6px rgba(107,214,255,0.4);
+  }
+  #vol::-moz-range-thumb {
+    width: 12px; height: 12px; border-radius: 50%; border: none;
+    background: #6bd6ff; cursor: pointer; box-shadow: 0 0 6px rgba(107,214,255,0.4);
+  }
+
+  /* 唤出提示 */
+  #hint {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    color: rgba(180, 200, 240, 0.25); font-size: 12px; letter-spacing: 4px;
+    z-index: 9; pointer-events: none; transition: opacity 0.5s ease;
+  }
+  #hint.fade { opacity: 0; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="player">
+  <div id="disc"></div>
+  <div class="song-title">黑色毛衣</div>
+  <div class="song-sub">夜 深 了 · 好 梦</div>
+  <div id="track"><div id="fill"></div></div>
+  <div id="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
+  <div id="controls">
+    <button class="ctrl-btn" id="prevBtn">&#9664;&#9664;</button>
+    <button class="ctrl-btn" id="playBtn">&#9654;</button>
+    <button class="ctrl-btn" id="nextBtn">&#9654;&#9654;</button>
+  </div>
+  <div id="volWrap">
+    <span id="volIcon">&#128266;</span>
+    <input type="range" id="vol" min="0" max="1" step="0.01" value="0.7" />
+  </div>
+</div>
+
+<div id="hint">点 击 空 白 处 唤 出 播 放 器</div>
+
+<audio id="audio" preload="auto" src="heisemaoyi.mp3"></audio>
+
+<script>
+/* ============================================================
+   星空夜语 —— 助眠音乐播放器
+   流星雨背景 · 闪烁星空 · 月光 · 萤火虫
+   ============================================================ */
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+let W, H, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+/* ---- 星空 ---- */
+const STAR_COLORS = ['#ffffff', '#cfe6ff', '#e8d8ff', '#ffe9b8', '#bfeaff'];
+let stars = [];
+function initStars() {
+  stars = [];
+  const n = Math.round((W * H) / 3500);
+  for (let i = 0; i < n; i++) {
+    const bright = Math.random();
+    stars.push({
+      x: Math.random() * W, y: Math.random() * H,
+      r: bright > 0.95 ? 1.4 + Math.random() * 1.2 : Math.random() * 0.9 + 0.2,
+      tw: Math.random() * Math.PI * 2,
+      tws: 0.3 + Math.random() * 1.2,
+      color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
+      flare: bright > 0.97
+    });
+  }
+}
+initStars();
+addEventListener('resize', initStars);
+
+/* ---- 流星 ---- */
+const meteors = [];
+let meteorTimer = 0;
+
+function spawnMeteor() {
+  const fromLeft = Math.random() < 0.6;
+  const startY = Math.random() * H * 0.4;
+  const speed = 280 + Math.random() * 200;
+  const angle = 0.35 + Math.random() * 0.15;
+  meteors.push({
+    x: fromLeft ? -80 : W + 80,
+    y: startY,
+    vx: (fromLeft ? 1 : -1) * speed * Math.cos(angle),
+    vy: speed * Math.sin(angle),
+    life: 0,
+    max: 1.8 + Math.random() * 1.2,
+    len: 100 + Math.random() * 120,
+    hue: 200 + Math.random() * 60,
+    width: 1.2 + Math.random() * 1.0
+  });
+}
+
+function updateMeteors(dt) {
+  meteorTimer -= dt;
+  if (meteorTimer <= 0) {
+    spawnMeteor();
+    meteorTimer = 1.5 + Math.random() * 3.5;
+  }
+  for (const m of meteors) {
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    m.life += dt;
+  }
+  for (let i = meteors.length - 1; i >= 0; i--) {
+    if (meteors[i].life > meteors[i].max) meteors.splice(i, 1);
+  }
+}
+
+function drawMeteors() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const m of meteors) {
+    const p = m.life / m.max;
+    const a = Math.sin(Math.min(1, p) * Math.PI) * 0.8;
+    const ang = Math.atan2(m.vy, m.vx);
+    const tx = m.x - Math.cos(ang) * m.len;
+    const ty = m.y - Math.sin(ang) * m.len;
+    const g = ctx.createLinearGradient(m.x, m.y, tx, ty);
+    g.addColorStop(0, `hsla(${m.hue}, 90%, 85%, ${a})`);
+    g.addColorStop(0.4, `hsla(${m.hue}, 80%, 70%, ${a * 0.4})`);
+    g.addColorStop(1, `hsla(${m.hue}, 80%, 60%, 0)`);
+    ctx.strokeStyle = g;
+    ctx.lineWidth = m.width;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = `hsl(${m.hue}, 90%, 75%)`;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    // 头部亮点
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.width * 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${m.hue}, 100%, 92%, ${a})`;
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 萤火虫 ---- */
+const fireflies = [];
+function initFireflies() {
+  fireflies.length = 0;
+  const n = 25;
+  for (let i = 0; i < n; i++) {
+    fireflies.push({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 15,
+      vy: (Math.random() - 0.5) * 10,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.5 + Math.random() * 1.0,
+      r: 1 + Math.random() * 1.5
+    });
+  }
+}
+initFireflies();
+addEventListener('resize', initFireflies);
+
+function drawFireflies(dt) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of fireflies) {
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.phase += dt * f.speed;
+    // 缓慢游荡
+    f.vx += (Math.random() - 0.5) * 8 * dt;
+    f.vy += (Math.random() - 0.5) * 5 * dt;
+    f.vx = Math.max(-20, Math.min(20, f.vx));
+    f.vy = Math.max(-15, Math.min(15, f.vy));
+    // 边界回绕
+    if (f.x < -10) f.x = W + 10;
+    if (f.x > W + 10) f.x = -10;
+    if (f.y < -10) f.y = H + 10;
+    if (f.y > H + 10) f.y = -10;
+    const glow = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(f.phase));
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 6);
+    g.addColorStop(0, `rgba(180, 220, 150, ${glow * 0.6})`);
+    g.addColorStop(0.5, `rgba(150, 200, 120, ${glow * 0.15})`);
+    g.addColorStop(1, 'rgba(100, 150, 80, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r * 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(200, 240, 170, ${glow * 0.8})`;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 月亮 ---- */
+function drawMoon() {
+  const mx = W * 0.82, my = H * 0.18;
+  const mr = Math.min(W, H) * 0.05;
+  // 外层光晕
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 4);
+  halo.addColorStop(0, 'rgba(230, 235, 255, 0.15)');
+  halo.addColorStop(0.5, 'rgba(200, 215, 255, 0.05)');
+  halo.addColorStop(1, 'rgba(180, 200, 240, 0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(mx, my, mr * 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  // 月球本体
+  const g = ctx.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
+  g.addColorStop(0, '#f0f4ff');
+  g.addColorStop(0.6, '#d0d8ee');
+  g.addColorStop(1, '#a0aac8');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(mx, my, mr, 0, Math.PI * 2);
+  ctx.fill();
+  // 环形山
+  ctx.fillStyle = 'rgba(150, 160, 190, 0.2)';
+  ctx.beginPath(); ctx.arc(mx + mr * 0.2, my - mr * 0.1, mr * 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx - mr * 0.15, my + mr * 0.25, mr * 0.1, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx + mr * 0.35, my + mr * 0.15, mr * 0.08, 0, Math.PI * 2); ctx.fill();
+}
+
+/* ---- 背景 ---- */
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#050818');
+  g.addColorStop(0.4, '#080a1e');
+  g.addColorStop(0.7, '#06081a');
+  g.addColorStop(1, '#03040e');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // 远处微光
+  ctx.globalCompositeOperation = 'lighter';
+  const t = performance.now() / 1000;
+  const clouds = [
+    { h: 230, ox: -0.2, oy: -0.1 },
+    { h: 260, ox: 0.15, oy: 0.2 },
+    { h: 210, ox: 0.3, oy: -0.15 }
+  ];
+  for (let i = 0; i < clouds.length; i++) {
+    const c = clouds[i];
+    const bx = W * 0.5 + Math.cos(t * 0.05 + i * 2) * W * 0.1 + W * c.ox;
+    const by = H * 0.5 + Math.sin(t * 0.04 + i * 1.5) * H * 0.08 + H * c.oy;
+    const rad = Math.min(W, H) * 0.35;
+    const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rad);
+    rg.addColorStop(0, `hsla(${c.h}, 70%, 50%, 0.04)`);
+    rg.addColorStop(0.6, `hsla(${c.h}, 60%, 40%, 0.015)`);
+    rg.addColorStop(1, 'hsla(0,0%,0%,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(bx, by, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 星星绘制 ---- */
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function drawStars(dt) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const s of stars) {
+    s.y -= dt * (0.3 + s.r * 0.2);
+    if (s.y < -4) { s.y = H + 4; s.x = Math.random() * W; }
+    const tw = 0.4 + 0.6 * Math.sin(t * s.tws + s.tw);
+    const a = Math.min(1, (0.15 + tw * 0.55) * (0.5 + s.r * 0.3));
+    const r = s.r * (1 + tw * 0.15);
+    // 柔光晕
+    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 3.5);
+    glow.addColorStop(0, hexA(s.color, a));
+    glow.addColorStop(1, hexA(s.color, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r * 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    // 星芯
+    ctx.fillStyle = hexA(s.color, Math.min(1, a + 0.15));
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    // 亮星十字星芒
+    if (s.flare) {
+      const fl = (r + tw * 2) * 2.5;
+      ctx.strokeStyle = hexA(s.color, a * 0.6);
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(s.x - fl, s.y); ctx.lineTo(s.x + fl, s.y);
+      ctx.moveTo(s.x, s.y - fl); ctx.lineTo(s.x, s.y + fl);
+      ctx.stroke();
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 主循环 ---- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000) || 0;
+  last = now;
+  drawBackground();
+  drawMoon();
+  drawStars(dt);
+  drawFireflies(dt);
+  updateMeteors(dt);
+  drawMeteors();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ============================================================
+   播放器逻辑
+   ============================================================ */
+const audio = document.getElementById('audio');
+const disc = document.getElementById('disc');
+const playBtn = document.getElementById('playBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const fill = document.getElementById('fill');
+const track = document.getElementById('track');
+const curTime = document.getElementById('curTime');
+const durTime = document.getElementById('durTime');
+const vol = document.getElementById('vol');
+const player = document.getElementById('player');
+const hint = document.getElementById('hint');
+
+audio.volume = 0.7;
+
+function fmt(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return m + ':' + String(ss).padStart(2, '0');
+}
+
+function togglePlay() {
+  if (audio.paused) {
+    audio.play().catch(e => console.warn(e));
+  } else {
+    audio.pause();
+  }
+}
+
+audio.addEventListener('play', () => {
+  playBtn.innerHTML = '&#10074;&#10074;';
+  disc.classList.add('playing');
+});
+audio.addEventListener('pause', () => {
+  playBtn.innerHTML = '&#9654;';
+  disc.classList.remove('playing');
+});
+audio.addEventListener('loadedmetadata', () => {
+  durTime.textContent = fmt(audio.duration);
+});
+audio.addEventListener('timeupdate', () => {
+  if (audio.duration) {
+    fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+    curTime.textContent = fmt(audio.currentTime);
+  }
+});
+audio.addEventListener('ended', () => {
+  audio.currentTime = 0;
+  audio.play();
+});
+
+playBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+prevBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = 0; });
+nextBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = Math.max(0, audio.currentTime - 10); });
+
+track.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!audio.duration) return;
+  const rect = track.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+});
+
+vol.addEventListener('input', (e) => {
+  audio.volume = parseFloat(e.target.value);
+});
+vol.addEventListener('click', (e) => e.stopPropagation());
+
+// 点击空白处唤出/隐藏播放器
+let hideTimer;
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#player')) return;
+  player.classList.remove('hidden');
+  hint.classList.add('fade');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    if (!audio.paused) player.classList.add('hidden');
+  }, 6000);
+});
+
+// 鼠标移动也唤出
+document.addEventListener('mousemove', () => {
+  player.classList.remove('hidden');
+  hint.classList.add('fade');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    if (!audio.paused) player.classList.add('hidden');
+  }, 6000);
+});
+
+// 初始提示淡出
+setTimeout(() => hint.classList.add('fade'), 5000);
+</script>
+</body>
+</html>
