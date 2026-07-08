@@ -166,7 +166,7 @@
   </div>
   <div id="volWrap">
     <span id="volIcon">&#128266;</span>
-    <input type="range" id="vol" min="0" max="1" step="0.01" value="0.7" />
+    <input type="range" id="vol" min="0" max="1" step="0.01" value="1" />
   </div>
 </div>
 
@@ -929,7 +929,7 @@ const vol = document.getElementById('vol');
 const player = document.getElementById('player');
 const hint = document.getElementById('hint');
 
-audio.volume = 0.7;
+audio.volume = 1;
 
 function fmt(s) {
   if (!isFinite(s)) return '0:00';
