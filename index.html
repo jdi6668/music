@@ -174,7 +174,7 @@
 <div id="lyric"></div>
 
 <div id="hint">点 击 空 白 处 唤 出 播 放 器</div>
-<div id="watermark">@zxr定制</div>
+<div id="watermark">@专属定制</div>
 
 <audio id="audio" preload="auto" src="heisemaoyi.mp3" crossorigin="anonymous"></audio>
 
@@ -729,7 +729,7 @@ function drawLyricStars(dt, energy) {
   if (lyricPhase === 'forming' && currentTotalChars > 0) {
     const audioT = audioEl.currentTime;
     const lineDur = currentLineEnd - currentLineStart;
-    const revealDur = Math.max(0.5, lineDur * 0.8);
+    const revealDur = lineDur >= 10 ? 2 : Math.max(0.5, lineDur * 0.8);
     const progress = Math.max(0, Math.min(1, (audioT - currentLineStart) / revealDur));
     const numRevealed = Math.ceil(progress * currentTotalChars);
     for (const p of lyricParticles) {
@@ -1014,7 +1014,10 @@ audio.addEventListener('ended', () => {
   audio.play();
 });
 
-playBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePlay(); });
+playBtn.addEventListener('click', (e) => {
+  e.stopPropagation(); togglePlay();
+  if (!audio.paused) { player.classList.add('hidden'); hint.classList.add('fade'); clearTimeout(hideTimer); }
+});
 prevBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = 0; });
 nextBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = Math.max(0, audio.currentTime - 10); });
 
