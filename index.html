@@ -256,7 +256,7 @@
 <div id="lyric"></div>
 
 <div id="hint">点 击 空 白 处 唤 出 播 放 器</div>
-<div id="watermark">@专属定制</div>
+<div id="watermark">@震撼哥出品</div>
 
 <audio id="audio" preload="auto" src="heisemaoyi.mp3" crossorigin="anonymous"></audio>
 
@@ -336,34 +336,57 @@ function getEnergy() {
   return { bass, mid, treble, overall: (bass + mid + treble) / 3 };
 }
 
-/* ---- 流星 (随旋律律动) ---- */
+/* ---- 流星 (随旋律律动, 浪漫飘逸风) ---- */
 const meteors = [];
+const meteorSparks = [];
 let meteorTimer = 0;
 let smoothBass = 0, smoothMid = 0, smoothTreble = 0;
+const METEOR_HUES = [330, 300, 270, 40, 200, 180];
 
 function spawnMeteor(energy) {
   const fromLeft = Math.random() < 0.6;
   const startY = Math.random() * H * 0.45;
-  // 速度随整体能量变化: 安静时慢, 高潮时快
-  const baseSpeed = 180 + energy.overall * 520 + energy.bass * 200;
-  const speed = baseSpeed + Math.random() * 80;
-  const angle = 0.3 + Math.random() * 0.2;
+  // 速度随整体能量变化: 整体放慢, 仍保留节奏感
+  const baseSpeed = 70 + energy.overall * 230 + energy.bass * 90;
+  const speed = baseSpeed + Math.random() * 30;
+  const angle = 0.28 + Math.random() * 0.18;
   // 大小随低频和中频变化
-  const width = 0.8 + energy.bass * 3.5 + energy.mid * 1.5 + Math.random() * 0.6;
-  const len = 70 + energy.overall * 200 + energy.treble * 120 + Math.random() * 60;
-  // 色相随频段变化: 低频偏蓝紫, 高频偏白金
-  const hue = 200 + energy.mid * 80 + energy.treble * 60 + Math.random() * 30;
+  const width = 1 + energy.bass * 3 + energy.mid * 1.3 + Math.random() * 0.8;
+  const len = 90 + energy.overall * 180 + energy.treble * 100 + Math.random() * 70;
+  // 色相从浪漫色系中随机选取, 再叠加能量偏移
+  const baseHue = METEOR_HUES[(Math.random() * METEOR_HUES.length) | 0];
+  const hue = baseHue + energy.mid * 20 + Math.random() * 14 - 7;
+  const vx = (fromLeft ? 1 : -1) * speed * Math.cos(angle);
+  const vy = speed * Math.sin(angle);
+  const dist = W + 220;
+  const travelSpeed = Math.hypot(vx, vy) || 1;
   meteors.push({
-    x: fromLeft ? -80 : W + 80,
+    x: fromLeft ? -100 : W + 100,
     y: startY,
-    vx: (fromLeft ? 1 : -1) * speed * Math.cos(angle),
-    vy: speed * Math.sin(angle),
+    vx, vy,
     life: 0,
-    max: 1.5 + Math.random() * 1.5 + energy.overall * 0.8,
+    max: (dist / travelSpeed) * (0.55 + Math.random() * 0.25),
     len: len,
     hue: hue,
     width: width,
-    brightness: 0.5 + energy.overall * 0.5
+    brightness: 0.55 + energy.overall * 0.45,
+    sparkTimer: 0
+  });
+}
+
+function spawnSpark(m) {
+  const ang = Math.atan2(m.vy, m.vx);
+  const backX = m.x - Math.cos(ang) * m.len * (0.3 + Math.random() * 0.5);
+  const backY = m.y - Math.sin(ang) * m.len * (0.3 + Math.random() * 0.5);
+  meteorSparks.push({
+    x: backX + (Math.random() - 0.5) * 6,
+    y: backY + (Math.random() - 0.5) * 6,
+    vx: (Math.random() - 0.5) * 10,
+    vy: (Math.random() - 0.5) * 10 + 4,
+    life: 0,
+    max: 0.5 + Math.random() * 0.6,
+    r: 0.6 + Math.random() * 1.4,
+    hue: m.hue + (Math.random() - 0.5) * 20
   });
 }
 
@@ -374,22 +397,35 @@ function updateMeteors(dt, energy) {
   smoothTreble += (energy.treble - smoothTreble) * 0.15;
 
   meteorTimer -= dt;
-  // 生成频率随能量变化: 安静时稀疏, 高潮时密集
-  const spawnInterval = Math.max(0.15, 2.8 - energy.overall * 2.5 - energy.bass * 1.0);
+  // 生成频率随能量变化: 安静时稀疏, 高潮时密集, 整体节奏放慢
+  const spawnInterval = Math.max(0.35, 3.6 - energy.overall * 2.6 - energy.bass * 1.0);
   if (meteorTimer <= 0) {
     spawnMeteor(energy);
     // 高能量时可能一次生成多颗
-    if (energy.overall > 0.5 && Math.random() < energy.overall * 0.6) spawnMeteor(energy);
-    if (energy.bass > 0.6 && Math.random() < 0.3) spawnMeteor(energy);
-    meteorTimer = spawnInterval + Math.random() * 0.5;
+    if (energy.overall > 0.55 && Math.random() < energy.overall * 0.4) spawnMeteor(energy);
+    meteorTimer = spawnInterval + Math.random() * 0.8;
   }
   for (const m of meteors) {
     m.x += m.vx * dt;
     m.y += m.vy * dt;
     m.life += dt;
+    m.sparkTimer -= dt;
+    if (m.sparkTimer <= 0) {
+      spawnSpark(m);
+      m.sparkTimer = 0.02 + Math.random() * 0.02;
+    }
   }
   for (let i = meteors.length - 1; i >= 0; i--) {
     if (meteors[i].life > meteors[i].max) meteors.splice(i, 1);
+  }
+  for (const s of meteorSparks) {
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.vy += 6 * dt;
+    s.life += dt;
+  }
+  for (let i = meteorSparks.length - 1; i >= 0; i--) {
+    if (meteorSparks[i].life > meteorSparks[i].max) meteorSparks.splice(i, 1);
   }
 }
 
