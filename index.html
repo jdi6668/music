@@ -566,6 +566,7 @@ loadLyrics();
 const lyricCanvas = document.createElement('canvas');
 const lyricCtx = lyricCanvas.getContext('2d');
 const LYRIC_PARTICLE_COUNT = 2500;
+const LYRIC_COLORS = ['#ff6b9d', '#c084fc', '#818cf8', '#38bdf8', '#34d399', '#fbbf24', '#fb923c', '#f472b6', '#a78bfa', '#22d3ee', '#facc15', '#4ade80'];
 let lyricParticles = [];
 let lyricStarActive = false;
 let lyricStarOpacity = 0;
@@ -588,7 +589,7 @@ function initLyricParticles() {
       tw: Math.random() * Math.PI * 2,
       tws: 0.5 + Math.random() * 1.5,
       r: 0.5 + Math.random() * 0.5,
-      color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
+      color: LYRIC_COLORS[(Math.random() * LYRIC_COLORS.length) | 0],
       formEase: 0.35,
       disperseEase: 0.6,
       revealIdx: -1
