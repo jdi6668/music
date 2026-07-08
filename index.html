@@ -645,8 +645,10 @@ function setLyricText(text) {
   }
   if (lyricPhase === 'forming') {
     for (const p of lyricParticles) {
-      p.hx = Math.random() * W;
-      p.hy = Math.random() * H;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * Math.min(W, H) * 0.3;
+      p.hx = p.x + Math.cos(angle) * dist;
+      p.hy = p.y + Math.sin(angle) * dist;
       p.hasTarget = false;
     }
     pendingLyricText = text;
