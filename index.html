@@ -200,7 +200,7 @@
   /* 歌词 */
   #lyric {
     position: fixed; left: 0; right: 0; bottom: 14%; text-align: center;
-    color: #e8ecff; font-size: clamp(20px, 4.5vw, 38px); font-weight: 600; letter-spacing: 3px;
+    color: #e8ecff; font-size: clamp(20px, 4.5vw, 38px); font-weight: 400; letter-spacing: 3px;
     padding: 0 24px; z-index: 6; pointer-events: none;
     opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(5px);
     transition: opacity 0.9s ease, transform 0.9s ease, filter 0.9s ease;
@@ -787,11 +787,11 @@ function getTextTargetsPerChar(text) {
   let fontSize = Math.min(W * 0.12, H * 0.14, 78);
   const colGap = 20;
   const maxTotalW = W * 0.85;
-  lyricCtx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+  lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
   let charW = lyricCtx.measureText('一').width;
   while ((charW + colGap) * segments.length > maxTotalW && fontSize > 20) {
     fontSize -= 2;
-    lyricCtx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+    lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
     charW = lyricCtx.measureText('一').width;
   }
   const lineH = Math.ceil(fontSize * 1.25);
@@ -801,7 +801,7 @@ function getTextTargetsPerChar(text) {
   const tw = colW * segments.length;
   lyricCanvas.width = tw;
   lyricCanvas.height = th;
-  lyricCtx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+  lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
   lyricCtx.fillStyle = '#fff';
   lyricCtx.textBaseline = 'middle';
   lyricCtx.textAlign = 'center';
