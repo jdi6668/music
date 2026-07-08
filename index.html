@@ -584,27 +584,34 @@ initLyricParticles();
 
 function getTextTargets(text) {
   if (!text) return [];
-  const chars = [...text];
+  const segments = text.split(/\s+/).filter(s => s.length > 0);
   let fontSize = Math.min(W * 0.12, H * 0.14, 78);
-  const maxCharW = W * 0.7;
+  const colGap = 20;
+  const maxTotalW = W * 0.85;
   lyricCtx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
   let charW = lyricCtx.measureText('一').width;
-  while (charW > maxCharW && fontSize > 24) {
+  while ((charW + colGap) * segments.length > maxTotalW && fontSize > 20) {
     fontSize -= 2;
     lyricCtx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
     charW = lyricCtx.measureText('一').width;
   }
   const lineH = Math.ceil(fontSize * 1.25);
-  const tw = Math.ceil(charW) + 20;
-  const th = lineH * chars.length;
+  const colW = Math.ceil(charW) + colGap;
+  const maxColChars = Math.max(...segments.map(s => [...s].length));
+  const th = lineH * maxColChars;
+  const tw = colW * segments.length;
   lyricCanvas.width = tw;
   lyricCanvas.height = th;
   lyricCtx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
   lyricCtx.fillStyle = '#fff';
   lyricCtx.textBaseline = 'middle';
   lyricCtx.textAlign = 'center';
-  for (let i = 0; i < chars.length; i++) {
-    lyricCtx.fillText(chars[i], tw / 2, lineH * i + lineH / 2);
+  for (let col = 0; col < segments.length; col++) {
+    const chars = [...segments[col]];
+    const colX = (segments.length - 1 - col) * colW + colW / 2;
+    for (let i = 0; i < chars.length; i++) {
+      lyricCtx.fillText(chars[i], colX, lineH * i + lineH / 2);
+    }
   }
   const imgData = lyricCtx.getImageData(0, 0, tw, th);
   const targets = [];
