@@ -1,48 +1,50 @@
-# 星空夜语 · 助眠音乐播放器
+# Starry Night Music Player
 
-![项目展示](show1.png)
+![Project Demo](show1.png)
 
-## 简介
+[中文文档](README.zh-CN.md)
 
-一个沉浸式的助眠音乐播放器，结合了星空、流星雨、月光和萤火虫等唯美视觉效果，为用户带来宁静的夜晚音乐体验。
+## Overview
 
-## ✨ 特性
+An immersive sleep music player featuring stunning visual effects including starry skies, meteor showers, moonlight, and fireflies. Designed to provide users with a peaceful and serene nighttime music experience.
 
-- **动态星空背景** - 闪烁的星星随音乐律动
-- **流星雨效果** - 流星划过夜空，营造浪漫氛围
-- **月光动画** - 缓慢漂移的月亮，随旋律呼吸
-- **萤火虫飞舞** - 温暖的萤火虫在夜空中游荡
-- **歌词显示** - 同步显示歌词，支持星星拼字特效
-- **精美播放器** - 毛玻璃效果的播放器界面
-- **音频可视化** - 背景效果随音乐节奏变化
+## ✨ Features
 
-## 🎵 使用方法
+- **Dynamic Starry Background** - Twinkling stars that pulse with the music rhythm
+- **Meteor Shower Effects** - Shooting stars across the night sky creating a romantic atmosphere
+- **Moonlight Animation** - Slowly drifting moon that breathes with the melody
+- **Fireflies** - Warm fireflies wandering through the night sky
+- **Lyrics Display** - Synchronized lyrics with star particle text effects
+- **Elegant Player** - Frosted glass effect player interface
+- **Audio Visualization** - Background effects respond to music rhythm
 
-1. 克隆仓库到本地
-2. 用浏览器打开 `index.html` 文件
-3. 点击播放按钮开始播放音乐
-4. 点击空白处可以隐藏/显示播放器
+## 🎵 Usage
 
-## 📁 文件说明
+1. Clone the repository to your local machine
+2. Open `index.html` in your web browser
+3. Click the play button to start playing music
+4. Click on empty space to hide/show the player
 
-- `index.html` - 主播放器页面
-- `index2.html` - `index3.html` 等 - 不同版本的播放器
-- `star.html` - 星空特效版本
-- `music/` - 音乐文件目录
-- `*.lrc` - 歌词文件
-- `*.mp3` - 音频文件
+## 📁 File Structure
 
-## 🛠️ 技术栈
+- `index.html` - Main player page
+- `index2.html`, `index3.html`, etc. - Different versions of the player
+- `star.html` - Star effect version
+- `music/` - Music files directory
+- `*.lrc` - Lyrics files
+- `*.mp3` - Audio files
+
+## 🛠️ Tech Stack
 
 - HTML5 Canvas
 - Web Audio API
-- CSS3 动画
-- 原生 JavaScript
+- CSS3 Animations
+- Vanilla JavaScript
 
-## 📝 许可证
+## 📝 License
 
 MIT License
 
 ---
 
-**@震撼哥出品**
+**Created by @震撼哥**
