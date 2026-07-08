@@ -549,6 +549,10 @@ const LYRIC_PARTICLE_COUNT = 2000;
 let lyricParticles = [];
 let lyricStarActive = false;
 let lyricStarOpacity = 0;
+let lyricPhase = 'idle';
+let pendingLyricText = null;
+let disperseTimer = 0;
+const DISPERSE_DURATION = 0.1;
 
 function initLyricParticles() {
   lyricParticles = [];
@@ -561,8 +565,8 @@ function initLyricParticles() {
       tws: 0.5 + Math.random() * 1.5,
       r: 1.0 + Math.random() * 1.0,
       color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
-      formEase: 0.18,
-      disperseEase: 0.015 + Math.random() * 0.015
+      formEase: 0.35,
+      disperseEase: 0.6
     });
   }
 }
@@ -606,12 +610,7 @@ function getTextTargets(text) {
   return targets;
 }
 
-function setLyricText(text) {
-  if (!text) {
-    for (const p of lyricParticles) p.hasTarget = false;
-    lyricStarActive = false;
-    return;
-  }
+function assignTargets(text) {
   const targets = getTextTargets(text);
   if (!targets.length) {
     for (const p of lyricParticles) p.hasTarget = false;
@@ -637,9 +636,39 @@ function setLyricText(text) {
   lyricStarActive = true;
 }
 
+function setLyricText(text) {
+  if (!text) {
+    for (const p of lyricParticles) p.hasTarget = false;
+    lyricStarActive = false;
+    lyricPhase = 'idle';
+    return;
+  }
+  if (lyricPhase === 'forming') {
+    for (const p of lyricParticles) {
+      p.hx = Math.random() * W;
+      p.hy = Math.random() * H;
+      p.hasTarget = false;
+    }
+    pendingLyricText = text;
+    lyricPhase = 'dispersing';
+    disperseTimer = DISPERSE_DURATION;
+  } else {
+    assignTargets(text);
+    lyricPhase = 'forming';
+  }
+}
+
 function drawLyricStars(dt) {
   const t = performance.now() / 1000;
-  const targetOpacity = lyricStarActive ? 1 : 0;
+  if (lyricPhase === 'dispersing') {
+    disperseTimer -= dt;
+    if (disperseTimer <= 0) {
+      assignTargets(pendingLyricText);
+      pendingLyricText = null;
+      lyricPhase = 'forming';
+    }
+  }
+  const targetOpacity = (lyricPhase === 'forming' || lyricPhase === 'dispersing') ? 1 : 0;
   lyricStarOpacity += (targetOpacity - lyricStarOpacity) * 0.04;
   if (lyricStarOpacity < 0.01) return;
   ctx.globalCompositeOperation = 'lighter';
