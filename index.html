@@ -197,11 +197,14 @@ function initStars() {
     const bright = Math.random();
     stars.push({
       x: Math.random() * W, y: Math.random() * H,
+      bx: 0, by: 0,
       r: bright > 0.95 ? 1.4 + Math.random() * 1.2 : Math.random() * 0.9 + 0.2,
       tw: Math.random() * Math.PI * 2,
       tws: 0.3 + Math.random() * 1.2,
       color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
-      flare: bright > 0.97
+      flare: bright > 0.97,
+      phase: Math.random() * Math.PI * 2,
+      freq: 0.5 + Math.random() * 1.5
     });
   }
 }
@@ -472,36 +475,43 @@ function hexA(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-function drawStars(dt) {
+function drawStars(dt, energy) {
   const t = performance.now() / 1000;
   ctx.globalCompositeOperation = 'lighter';
+  const amp = 3 + energy.overall * 25 + energy.bass * 15;
+  const ampY = 2 + energy.mid * 18 + energy.treble * 10;
   for (const s of stars) {
     s.y -= dt * (0.3 + s.r * 0.2);
     if (s.y < -4) { s.y = H + 4; s.x = Math.random() * W; }
+    const dx = Math.sin(t * s.freq + s.phase) * amp * (0.5 + s.r * 0.5);
+    const dy = Math.cos(t * s.freq * 0.8 + s.phase) * ampY * (0.5 + s.r * 0.5);
+    const px = s.x + dx;
+    const py = s.y + dy;
     const tw = 0.4 + 0.6 * Math.sin(t * s.tws + s.tw);
-    const a = Math.min(1, (0.15 + tw * 0.55) * (0.5 + s.r * 0.3));
-    const r = s.r * (1 + tw * 0.15);
+    const pulse = 1 + energy.overall * 0.8 + energy.bass * 0.4;
+    const a = Math.min(1, (0.15 + tw * 0.55) * (0.5 + s.r * 0.3) * pulse);
+    const r = s.r * (1 + tw * 0.15) * (1 + energy.treble * 0.3);
     // 柔光晕
-    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 3.5);
+    const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 3.5);
     glow.addColorStop(0, hexA(s.color, a));
     glow.addColorStop(1, hexA(s.color, 0));
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(s.x, s.y, r * 3.5, 0, Math.PI * 2);
+    ctx.arc(px, py, r * 3.5, 0, Math.PI * 2);
     ctx.fill();
     // 星芯
     ctx.fillStyle = hexA(s.color, Math.min(1, a + 0.15));
     ctx.beginPath();
-    ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+    ctx.arc(px, py, r, 0, Math.PI * 2);
     ctx.fill();
     // 亮星十字星芒
     if (s.flare) {
-      const fl = (r + tw * 2) * 2.5;
+      const fl = (r + tw * 2) * 2.5 * (1 + energy.overall * 0.5);
       ctx.strokeStyle = hexA(s.color, a * 0.6);
       ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.moveTo(s.x - fl, s.y); ctx.lineTo(s.x + fl, s.y);
-      ctx.moveTo(s.x, s.y - fl); ctx.lineTo(s.x, s.y + fl);
+      ctx.moveTo(px - fl, py); ctx.lineTo(px + fl, py);
+      ctx.moveTo(px, py - fl); ctx.lineTo(px, py + fl);
       ctx.stroke();
     }
   }
@@ -660,7 +670,7 @@ function setLyricText(text) {
   }
 }
 
-function drawLyricStars(dt) {
+function drawLyricStars(dt, energy) {
   const t = performance.now() / 1000;
   if (lyricPhase === 'dispersing') {
     disperseTimer -= dt;
@@ -680,20 +690,28 @@ function drawLyricStars(dt) {
     const ease = p.hasTarget ? p.formEase : p.disperseEase;
     p.x += (targetX - p.x) * ease;
     p.y += (targetY - p.y) * ease;
+    let px = p.x, py = p.y;
+    if (!p.hasTarget) {
+      const danceAmp = 4 + energy.overall * 30 + energy.bass * 20;
+      const danceAmpY = 3 + energy.mid * 22 + energy.treble * 12;
+      px += Math.sin(t * p.tws * 1.5 + p.tw) * danceAmp;
+      py += Math.cos(t * p.tws * 1.2 + p.tw) * danceAmpY;
+    }
     const tw = 0.6 + 0.4 * Math.sin(t * p.tws + p.tw);
     const forming = p.hasTarget ? lyricStarOpacity : lyricStarOpacity * 0.2;
-    const a = Math.min(1, (0.5 + tw * 0.4) * forming);
-    const r = p.r * (1 + tw * 0.1);
-    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.5);
+    const pulse = p.hasTarget ? 1 : (1 + energy.overall * 0.8 + energy.bass * 0.4);
+    const a = Math.min(1, (0.5 + tw * 0.4) * forming * pulse);
+    const r = p.r * (1 + tw * 0.1) * (p.hasTarget ? 1 : (1 + energy.treble * 0.3));
+    const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 2.5);
     glow.addColorStop(0, hexA(p.color, a * 0.8));
     glow.addColorStop(1, hexA(p.color, 0));
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r * 2.5, 0, Math.PI * 2);
+    ctx.arc(px, py, r * 2.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = hexA(p.color, Math.min(1, a + 0.35));
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r * 1.3, 0, Math.PI * 2);
+    ctx.arc(px, py, r * 1.3, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
@@ -718,8 +736,8 @@ function frame(now) {
   const energy = getEnergy();
   drawBackground();
   drawMoon(energy);
-  drawStars(dt);
-  drawLyricStars(dt);
+  drawStars(dt, energy);
+  drawLyricStars(dt, energy);
   drawFireflies(dt);
   updateMeteors(dt, energy);
   drawMeteors();
