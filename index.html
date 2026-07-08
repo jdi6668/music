@@ -145,7 +145,7 @@
   /* 水印 */
   #watermark {
     position: fixed; right: 16px; bottom: 12px; z-index: 9;
-    color: rgba(180, 200, 240, 0.22); font-size: 12px; letter-spacing: 1px;
+    color: rgba(180, 200, 240, 0.22); font-size: 10px; letter-spacing: 1px;
     pointer-events: none; user-select: none;
   }
 </style>
@@ -174,7 +174,7 @@
 <div id="lyric"></div>
 
 <div id="hint">点 击 空 白 处 唤 出 播 放 器</div>
-<div id="watermark">@zzxrxrxin</div>
+<div id="watermark">@震撼哥出品</div>
 
 <audio id="audio" preload="auto" src="heisemaoyi.mp3" crossorigin="anonymous"></audio>
 
@@ -563,7 +563,7 @@ loadLyrics();
 /* ---- 星星拼歌词特效 ---- */
 const lyricCanvas = document.createElement('canvas');
 const lyricCtx = lyricCanvas.getContext('2d');
-const LYRIC_PARTICLE_COUNT = 2000;
+const LYRIC_PARTICLE_COUNT = 2500;
 let lyricParticles = [];
 let lyricStarActive = false;
 let lyricStarOpacity = 0;
