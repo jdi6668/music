@@ -294,7 +294,9 @@ function initStars() {
       color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
       flare: bright > 0.97,
       phase: Math.random() * Math.PI * 2,
-      freq: 0.5 + Math.random() * 1.5
+      freq: 0.5 + Math.random() * 1.5,
+      trail: [],
+      trailTimer: 0
     });
   }
 }
@@ -633,7 +635,7 @@ function drawStars(dt, energy) {
   const ampY = 2 + energy.mid * 18 + energy.treble * 10;
   for (const s of stars) {
     s.y -= dt * (0.3 + s.r * 0.2);
-    if (s.y < -4) { s.y = H + 4; s.x = Math.random() * W; }
+    if (s.y < -4) { s.y = H + 4; s.x = Math.random() * W; s.trail = []; }
     const dx = Math.sin(t * s.freq + s.phase) * amp * (0.5 + s.r * 0.5);
     const dy = Math.cos(t * s.freq * 0.8 + s.phase) * ampY * (0.5 + s.r * 0.5);
     const px = s.x + dx;
@@ -642,6 +644,30 @@ function drawStars(dt, energy) {
     const pulse = 1 + energy.overall * 0.8 + energy.bass * 0.4;
     const a = Math.min(1, (0.15 + tw * 0.55) * (0.5 + s.r * 0.3) * pulse);
     const r = s.r * (1 + tw * 0.15) * (1 + energy.treble * 0.3);
+    
+    // 更新轨迹
+    s.trailTimer -= dt;
+    if (s.trailTimer <= 0) {
+      s.trail.push({ x: px, y: py, age: 0 });
+      if (s.trail.length > 8) s.trail.shift();
+      s.trailTimer = 0.03 + Math.random() * 0.02;
+    }
+    for (const tp of s.trail) {
+      tp.age += dt;
+    }
+    s.trail = s.trail.filter(tp => tp.age < 0.25);
+    
+    // 绘制轨迹
+    for (let i = 0; i < s.trail.length; i++) {
+      const tp = s.trail[i];
+      const trailAlpha = (1 - tp.age / 0.25) * a * 0.3;
+      const trailR = r * (1 - tp.age / 0.25) * 0.6;
+      ctx.fillStyle = hexA(s.color, trailAlpha);
+      ctx.beginPath();
+      ctx.arc(tp.x, tp.y, trailR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
     // 柔光晕
     const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 3.5);
     glow.addColorStop(0, hexA(s.color, a));
@@ -708,9 +734,23 @@ loadLyrics();
 /* ---- 星星拼歌词特效 ---- */
 const lyricCanvas = document.createElement('canvas');
 const lyricCtx = lyricCanvas.getContext('2d');
-const LYRIC_PARTICLE_COUNT = 2500;
+const PARTICLES_PER_CHAR = 400;
+const MAX_PARTICLE_COUNT = 5000;
 const LYRIC_COLORS = ['#ff6b9d', '#c084fc', '#818cf8', '#38bdf8', '#34d399', '#fbbf24', '#fb923c', '#f472b6', '#a78bfa', '#22d3ee', '#facc15', '#4ade80'];
 let lyricParticles = [];
+let activeParticleCount = 0;
+
+// 预渲染辉光精灵图，避免每帧创建数千个径向渐变
+const glowSpriteSize = 32;
+const glowCanvas = document.createElement('canvas');
+glowCanvas.width = glowSpriteSize;
+glowCanvas.height = glowSpriteSize;
+const glowCtx = glowCanvas.getContext('2d');
+const glowGrad = glowCtx.createRadialGradient(glowSpriteSize / 2, glowSpriteSize / 2, 0, glowSpriteSize / 2, glowSpriteSize / 2, glowSpriteSize / 2);
+glowGrad.addColorStop(0, '#fff');
+glowGrad.addColorStop(1, 'transparent');
+glowCtx.fillStyle = glowGrad;
+glowCtx.fillRect(0, 0, glowSpriteSize, glowSpriteSize);
 let lyricStarActive = false;
 let lyricStarOpacity = 0;
 let lyricPhase = 'idle';
@@ -724,14 +764,14 @@ const DISPERSE_DURATION = 0.1;
 
 function initLyricParticles() {
   lyricParticles = [];
-  for (let i = 0; i < LYRIC_PARTICLE_COUNT; i++) {
+  for (let i = 0; i < MAX_PARTICLE_COUNT; i++) {
     lyricParticles.push({
       x: Math.random() * W, y: Math.random() * H,
       hx: Math.random() * W, hy: Math.random() * H,
       tx: 0, ty: 0, hasTarget: false,
       tw: Math.random() * Math.PI * 2,
       tws: 0.5 + Math.random() * 1.5,
-      r: 0.5 + Math.random() * 0.5,
+      r: 0.8 + Math.random() * 0.6,
       color: LYRIC_COLORS[(Math.random() * LYRIC_COLORS.length) | 0],
       formEase: 0.35,
       disperseEase: 0.6,
@@ -779,7 +819,7 @@ function getTextTargetsPerChar(text) {
     lyricCtx.fillText(c.char, colX, lineH * c.row + lineH / 2);
     const imgData = lyricCtx.getImageData(0, 0, tw, th);
     const targets = [];
-    const step = 3;
+    const step = 2;
     for (let y = 0; y < th; y += step) {
       for (let x = 0; x < tw; x += step) {
         const idx = (y * tw + x) * 4;
@@ -800,39 +840,37 @@ function assignTargetsWithReveal(charTargets) {
       allTargets.push({ x: t.x, y: t.y, charIdx: i });
     }
   }
+  
+  // 动态计算需要的粒子数
+  activeParticleCount = Math.min(allTargets.length, MAX_PARTICLE_COUNT);
+
   if (!allTargets.length) {
-    for (const p of lyricParticles) p.hasTarget = false;
     lyricStarActive = false;
     return;
   }
+  
   for (let i = allTargets.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [allTargets[i], allTargets[j]] = [allTargets[j], allTargets[i]];
   }
   const cx = W / 2;
   const cy = H * 0.5;
-  const count = Math.min(allTargets.length, lyricParticles.length);
-  for (let i = 0; i < lyricParticles.length; i++) {
-    if (i < count) {
-      lyricParticles[i].tx = allTargets[i].x + cx;
-      lyricParticles[i].ty = allTargets[i].y + cy;
-      lyricParticles[i].revealIdx = allTargets[i].charIdx;
-      lyricParticles[i].hasTarget = false;
-    } else {
-      lyricParticles[i].hasTarget = false;
-      lyricParticles[i].revealIdx = -1;
-    }
+  for (let i = 0; i < activeParticleCount; i++) {
+    lyricParticles[i].tx = allTargets[i].x + cx;
+    lyricParticles[i].ty = allTargets[i].y + cy;
+    lyricParticles[i].revealIdx = allTargets[i].charIdx;
+    lyricParticles[i].hasTarget = false;
   }
   lyricStarActive = true;
 }
 
 function setLyricText(text, lineStart, lineEnd) {
   if (!text) {
-    for (const p of lyricParticles) p.hasTarget = false;
     lyricStarActive = false;
     lyricPhase = 'idle';
     currentCharTargets = [];
     currentTotalChars = 0;
+    activeParticleCount = 0;
     return;
   }
   const charTargets = getTextTargetsPerChar(text);
@@ -840,7 +878,8 @@ function setLyricText(text, lineStart, lineEnd) {
   currentLineEnd = lineEnd;
   currentTotalChars = charTargets.length;
   if (lyricPhase === 'forming') {
-    for (const p of lyricParticles) {
+    for (let i = 0; i < activeParticleCount; i++) {
+      const p = lyricParticles[i];
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * Math.min(W, H) * 0.3;
       p.hx = p.x + Math.cos(angle) * dist;
@@ -875,7 +914,8 @@ function drawLyricStars(dt, energy) {
     const revealDur = lineDur >= 10 ? 2 : Math.max(0.5, lineDur * 0.8);
     const progress = Math.max(0, Math.min(1, (audioT - currentLineStart) / revealDur));
     const numRevealed = Math.ceil(progress * currentTotalChars);
-    for (const p of lyricParticles) {
+    for (let i = 0; i < activeParticleCount; i++) {
+      const p = lyricParticles[i];
       if (p.revealIdx >= 0 && p.revealIdx < numRevealed) {
         p.hasTarget = true;
       }
@@ -885,7 +925,8 @@ function drawLyricStars(dt, energy) {
   lyricStarOpacity += (targetOpacity - lyricStarOpacity) * 0.04;
   if (lyricStarOpacity < 0.01) return;
   ctx.globalCompositeOperation = 'lighter';
-  for (const p of lyricParticles) {
+  for (let i = 0; i < activeParticleCount; i++) {
+    const p = lyricParticles[i];
     const targetX = p.hasTarget ? p.tx : p.hx;
     const targetY = p.hasTarget ? p.ty : p.hy;
     const ease = p.hasTarget ? p.formEase : p.disperseEase;
@@ -901,20 +942,19 @@ function drawLyricStars(dt, energy) {
     const tw = 0.6 + 0.4 * Math.sin(t * p.tws + p.tw);
     const forming = p.hasTarget ? lyricStarOpacity : lyricStarOpacity * 0.2;
     const pulse = p.hasTarget ? 1 : (1 + energy.overall * 0.8 + energy.bass * 0.4);
-    const a = Math.min(1, (0.5 + tw * 0.4) * forming * pulse);
+    const a = Math.min(1, (0.6 + tw * 0.35) * forming * pulse);
     const r = p.r * (1 + tw * 0.1) * (p.hasTarget ? 1 : (1 + energy.treble * 0.3));
-    const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 1.8);
-    glow.addColorStop(0, hexA(p.color, a * 0.7));
-    glow.addColorStop(1, hexA(p.color, 0));
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(px, py, r * 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = hexA(p.color, Math.min(1, a + 0.35));
-    ctx.beginPath();
-    ctx.arc(px, py, r * 0.9, 0, Math.PI * 2);
-    ctx.fill();
+    const glowR = r * 2.5;
+    // 使用预渲染辉光精灵图替代径向渐变
+    ctx.globalAlpha = a * 0.85;
+    ctx.drawImage(glowCanvas, px - glowR, py - glowR, glowR * 2, glowR * 2);
+    // 核心光点
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = Math.min(1, a + 0.45);
+    const cr = r * 1.1;
+    ctx.fillRect(px - cr, py - cr, cr * 2, cr * 2);
   }
+  ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
 }
 
