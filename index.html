@@ -1379,6 +1379,12 @@ async function loadSong(idx) {
     el.classList.toggle('active', i === idx);
   });
   if (audioReady && actx.state === 'suspended') actx.resume();
+  dashStatus.textContent = 'LOADING';
+  await new Promise(resolve => {
+    const onReady = () => { audioEl.removeEventListener('canplaythrough', onReady); resolve(); };
+    audioEl.addEventListener('canplaythrough', onReady, { once: true });
+    setTimeout(resolve, 8000);
+  });
   audioEl.play().catch(() => {});
 }
 
