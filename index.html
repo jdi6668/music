@@ -1,3 +1,1006 @@
-<html>
-    
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>亡命之徒 · 公路音乐播放器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #0a0805;
+    font-family: "Georgia", "Times New Roman", "Microsoft YaHei", serif; }
+  canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  /* ---- Film grain overlay ---- */
+  #grain {
+    position: fixed; inset: 0; z-index: 100; pointer-events: none;
+    opacity: 0.08; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+    animation: grainShift 0.3s steps(1) infinite;
+  }
+  @keyframes grainShift {
+    0% { transform: translate(0,0); }
+    25% { transform: translate(-2px,1px); }
+    50% { transform: translate(1px,-1px); }
+    75% { transform: translate(-1px,2px); }
+    100% { transform: translate(2px,0); }
+  }
+
+  /* ---- Vignette ---- */
+  #vignette {
+    position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.5) 80%, rgba(0,0,0,0.85) 100%);
+  }
+
+  /* ---- Film flicker ---- */
+  #flicker {
+    position: fixed; inset: 0; z-index: 99; pointer-events: none;
+    background: rgba(255,240,200,0.015);
+    animation: flicker 0.12s steps(1) infinite;
+  }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.92; }
+  }
+
+  :root { --bass: 0; --mid: 0; --treble: 0; }
+
+  /* ---- Player dashboard ---- */
+  #playerWrap {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 20; transition: opacity 0.6s ease, transform 0.6s ease;
+    perspective: 1000px;
+  }
+  #playerWrap.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.92); }
+
+  #player {
+    position: relative;
+    width: 380px; padding: 36px 34px 30px;
+    background: linear-gradient(170deg, rgba(22,18,12,0.82), rgba(12,10,8,0.88));
+    backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%);
+    border: 1px solid rgba(180,140,80,0.18);
+    border-radius: 18px;
+    box-shadow:
+      0 12px 60px rgba(0,0,0,0.7),
+      0 0 0 1px rgba(255,220,150,0.04) inset,
+      0 0 80px rgba(200,140,60, calc(0.06 + var(--bass) * 0.2)),
+      inset 0 1px 0 rgba(255,220,160,0.06);
+    overflow: hidden;
+  }
+  #player::before {
+    content: ''; position: absolute; inset: 0; border-radius: 18px; pointer-events: none; z-index: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(200,160,80,0.06), transparent 60%);
+  }
+  #player::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(200,160,80,0.25), transparent);
+    z-index: 1;
+  }
+  #player > * { position: relative; z-index: 2; }
+
+  /* ---- Dashboard top bar ---- */
+  .dash-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; padding-bottom: 14px;
+    border-bottom: 1px solid rgba(180,140,80,0.1);
+  }
+  .dash-label {
+    font-family: "Courier New", monospace;
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    color: rgba(200,170,120,0.5);
+  }
+  .dash-light {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,180,60, calc(0.3 + var(--mid) * 0.5));
+    box-shadow: 0 0 8px rgba(255,180,60, calc(0.4 + var(--mid) * 0.5));
+    animation: breathLight 3s ease-in-out infinite;
+  }
+  @keyframes breathLight {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+
+  /* ---- Vinyl record ---- */
+  #discWrap {
+    width: 180px; height: 180px; margin: 0 auto 24px;
+    position: relative;
+  }
+  #disc {
+    width: 100%; height: 100%; border-radius: 50%;
+    background:
+      repeating-radial-gradient(circle, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 2px, transparent 4px),
+      radial-gradient(circle at 40% 40%, #2a2218 0%, #1a1410 40%, #0a0806 100%);
+    position: relative;
+    box-shadow:
+      0 0 0 2px rgba(180,140,80,0.08),
+      0 8px 30px rgba(0,0,0,0.6),
+      0 0 calc(15px + var(--bass) * 40px) rgba(200,140,60, calc(0.15 + var(--bass) * 0.3)),
+      inset 0 0 30px rgba(0,0,0,0.7);
+    animation: spin 18s linear infinite;
+    animation-play-state: paused;
+  }
+  #disc.playing { animation-play-state: running; }
+  #disc::before {
+    content: ''; position: absolute; inset: 28px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #3a2e1e 0%, #2a1e12 50%, #1a1208 100%);
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.5), inset 0 0 2px rgba(200,160,80,0.2);
+  }
+  #disc::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #c8a050; transform: translate(-50%, -50%);
+    box-shadow: 0 0 8px rgba(200,160,80,0.5), inset 0 0 3px rgba(0,0,0,0.3);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- Song info ---- */
+  .song-title {
+    font-size: 22px; font-weight: 700; letter-spacing: 3px; text-align: center;
+    margin-bottom: 4px;
+    color: #d4b070;
+    text-shadow: 0 0 20px rgba(200,160,80,0.3), 0 2px 4px rgba(0,0,0,0.5);
+    font-family: "Georgia", serif;
+  }
+  .song-artist {
+    text-align: center; font-size: 12px; letter-spacing: 4px;
+    color: rgba(180,150,100,0.4); margin-bottom: 22px;
+    font-family: "Courier New", monospace; text-transform: uppercase;
+  }
+
+  /* ---- Road progress bar ---- */
+  #track {
+    width: 100%; height: 8px; cursor: pointer; margin-bottom: 8px;
+    position: relative; border-radius: 4px; overflow: visible;
+    background: rgba(30,25,18,0.6);
+    border: 1px solid rgba(180,140,80,0.08);
+  }
+  #trackRoad {
+    position: absolute; inset: 0; border-radius: 4px; overflow: hidden;
+    background:
+      repeating-linear-gradient(90deg,
+        transparent 0px, transparent 14px,
+        rgba(220,180,60,0.15) 14px, rgba(220,180,60,0.15) 28px);
+  }
+  #fill {
+    height: 100%; width: 0%; border-radius: 4px; position: relative;
+    background: linear-gradient(90deg, #c89030, #e8b840, #d4a020);
+    box-shadow: 0 0 12px rgba(220,180,60,0.5);
+    transition: width 0.15s linear;
+  }
+  #fill::after {
+    content: ''; position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle, #f0d060, #c89030);
+    box-shadow: 0 0 12px rgba(240,200,80,0.8), 0 0 24px rgba(220,180,60,0.4);
+    opacity: 0; transition: opacity 0.25s ease;
+  }
+  #track:hover #fill::after { opacity: 1; }
+  #times {
+    display: flex; justify-content: space-between;
+    color: rgba(180,150,100,0.35); font-size: 11px; letter-spacing: 1px;
+    margin-bottom: 22px; font-family: "Courier New", monospace;
+  }
+
+  /* ---- Controls (car stereo style) ---- */
+  #controls {
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+    margin-bottom: 20px;
+  }
+  .ctrl-btn {
+    width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(145deg, #2a2218, #1a1410);
+    color: rgba(200,170,120,0.6); font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s ease; position: relative; overflow: hidden;
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(200,160,80,0.1),
+      inset 0 -1px 0 rgba(0,0,0,0.3);
+    border: 1px solid rgba(180,140,80,0.1);
+  }
+  .ctrl-btn:hover {
+    background: linear-gradient(145deg, #3a2e1e, #2a2218);
+    color: #e8c878;
+    transform: scale(1.08);
+    box-shadow:
+      0 4px 16px rgba(0,0,0,0.5),
+      0 0 20px rgba(200,160,80,0.2),
+      inset 0 1px 0 rgba(200,160,80,0.15);
+  }
+  .ctrl-btn:active { transform: scale(0.95); }
+  #playBtn {
+    width: 62px; height: 62px; font-size: 22px;
+    background: linear-gradient(145deg, #c89030, #8a6020);
+    color: #1a1208; border: 1px solid rgba(220,180,60,0.3);
+    box-shadow:
+      0 4px 20px rgba(180,130,40,0.4),
+      0 0 0 1px rgba(255,220,120,0.1) inset,
+      inset 0 2px 0 rgba(255,230,150,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.2);
+  }
+  #playBtn:hover {
+    background: linear-gradient(145deg, #e8b840, #a87830);
+    box-shadow:
+      0 4px 30px rgba(200,160,60,0.5),
+      0 0 0 1px rgba(255,220,120,0.15) inset,
+      inset 0 2px 0 rgba(255,230,150,0.25);
+    transform: scale(1.06);
+  }
+  #playBtn.playing::before, #playBtn.playing::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid rgba(220,180,60,0.4);
+    animation: pulseRing 2s ease-out infinite;
+    pointer-events: none;
+  }
+  #playBtn.playing::after { animation-delay: 1s; }
+  @keyframes pulseRing {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
+  /* ---- Spectrum bars ---- */
+  #spectrum {
+    display: flex; align-items: flex-end; justify-content: center; gap: 2px;
+    height: 40px; margin-bottom: 18px; padding: 0 4px;
+  }
+  .spec-bar {
+    flex: 1; max-width: 6px; min-height: 2px; border-radius: 2px 2px 0 0;
+    background: linear-gradient(to top, rgba(200,100,20,0.3), rgba(255,180,40,0.8), rgba(255,220,100,0.9));
+    box-shadow: 0 0 6px rgba(255,160,40,0.4);
+    transition: height 0.05s linear;
+  }
+
+  /* ---- Volume knob ---- */
+  #volWrap {
+    display: flex; align-items: center; gap: 10px; justify-content: center;
+  }
+  #volIcon { color: rgba(200,170,120,0.4); font-size: 14px; }
+  #vol {
+    width: 100px; height: 4px; -webkit-appearance: none; appearance: none;
+    background: rgba(40,30,20,0.6); border-radius: 4px; outline: none;
+    border: 1px solid rgba(180,140,80,0.08);
+  }
+  #vol::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle, #d4a040, #8a6020); cursor: pointer;
+    box-shadow: 0 0 8px rgba(200,160,60,0.5), inset 0 1px 0 rgba(255,220,120,0.2);
+  }
+  #vol::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; border: none;
+    background: radial-gradient(circle, #d4a040, #8a6020); cursor: pointer;
+    box-shadow: 0 0 8px rgba(200,160,60,0.5);
+  }
+
+  /* ---- Playlist ---- */
+  #playlistToggle {
+    position: absolute; top: 14px; right: 14px;
+    width: 28px; height: 28px; border-radius: 6px; border: none; cursor: pointer;
+    background: rgba(40,30,20,0.5); color: rgba(200,170,120,0.5);
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s ease; z-index: 5;
+    border: 1px solid rgba(180,140,80,0.1);
+  }
+  #playlistToggle:hover { background: rgba(60,45,25,0.6); color: #e8c878; }
+  #playlist {
+    position: absolute; top: 48px; right: 14px;
+    width: 220px; max-height: 0; overflow: hidden;
+    background: rgba(18,14,10,0.95); border-radius: 10px;
+    border: 1px solid rgba(180,140,80,0.12);
+    transition: max-height 0.3s ease; z-index: 5;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  }
+  #playlist.open { max-height: 300px; overflow-y: auto; }
+  .pl-item {
+    padding: 12px 16px; cursor: pointer; transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(180,140,80,0.05);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pl-item:last-child { border-bottom: none; }
+  .pl-item:hover { background: rgba(50,38,22,0.4); }
+  .pl-item.active { background: rgba(80,58,30,0.3); }
+  .pl-item.active .pl-name { color: #e8c878; }
+  .pl-num {
+    font-family: "Courier New", monospace; font-size: 11px;
+    color: rgba(180,150,100,0.3); min-width: 18px;
+  }
+  .pl-name {
+    font-size: 13px; color: rgba(200,170,120,0.6);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ---- Lyrics ---- */
+  #lyric {
+    position: fixed; left: 0; right: 0; bottom: 12%; text-align: center;
+    color: #e8d0a0; font-size: clamp(18px, 4vw, 34px); font-weight: 400; letter-spacing: 4px;
+    padding: 0 24px; z-index: 15; pointer-events: none;
+    opacity: 0; transform: translateY(14px); filter: blur(4px);
+    transition: opacity 0.8s ease, transform 0.8s ease, filter 0.8s ease;
+    text-shadow: 0 0 20px rgba(200,160,80,0.4), 0 0 50px rgba(180,130,40,0.2), 0 2px 8px rgba(0,0,0,0.6);
+    font-family: "Georgia", "Microsoft YaHei", serif;
+  }
+  #lyric.show { opacity: 1; transform: translateY(0); filter: blur(0); }
+  #lyricNext {
+    position: fixed; left: 0; right: 0; bottom: 6%; text-align: center;
+    color: rgba(200,170,120,0.3); font-size: clamp(12px, 2.5vw, 17px); letter-spacing: 3px;
+    padding: 0 24px; z-index: 15; pointer-events: none;
+    transition: opacity 0.6s ease;
+    font-family: "Georgia", "Microsoft YaHei", serif;
+  }
+
+  /* ---- Hint ---- */
+  #hint {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    color: rgba(200,170,120,0.2); font-size: 11px; letter-spacing: 5px;
+    z-index: 18; pointer-events: none; transition: opacity 0.5s ease;
+    font-family: "Courier New", monospace; text-transform: uppercase;
+  }
+  #hint.fade { opacity: 0; }
+
+  /* ---- Watermark ---- */
+  #watermark {
+    position: fixed; right: 16px; bottom: 12px; z-index: 18;
+    color: rgba(200,170,120,0.18); font-size: 10px; letter-spacing: 2px;
+    pointer-events: none; user-select: none;
+    font-family: "Courier New", monospace;
+  }
+
+  /* ---- Title card ---- */
+  #titleCard {
+    position: fixed; left: 50%; top: 15%; transform: translateX(-50%);
+    z-index: 18; pointer-events: none; text-align: center;
+    opacity: 0; transition: opacity 1.5s ease;
+  }
+  #titleCard.show { opacity: 1; }
+  #titleCard .tc-main {
+    font-size: clamp(28px, 6vw, 52px); font-weight: 700; letter-spacing: 8px;
+    color: rgba(220,180,80,0.7);
+    text-shadow: 0 0 30px rgba(200,160,60,0.3), 0 4px 12px rgba(0,0,0,0.5);
+    font-family: "Georgia", serif;
+  }
+  #titleCard .tc-sub {
+    font-size: 12px; letter-spacing: 6px; color: rgba(180,150,100,0.3);
+    margin-top: 8px; font-family: "Courier New", monospace; text-transform: uppercase;
+  }
+
+  /* Scrollbar */
+  #playlist::-webkit-scrollbar { width: 4px; }
+  #playlist::-webkit-scrollbar-track { background: transparent; }
+  #playlist::-webkit-scrollbar-thumb { background: rgba(180,140,80,0.15); border-radius: 4px; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="grain"></div>
+<div id="flicker"></div>
+<div id="vignette"></div>
+
+<div id="titleCard">
+  <div class="tc-main">亡命之徒</div>
+  <div class="tc-sub">On The Road</div>
+</div>
+
+<div id="playerWrap">
+<div id="player">
+  <button id="playlistToggle">&#9776;</button>
+  <div id="playlist"></div>
+
+  <div class="dash-top">
+    <span class="dash-label">CH-01 ROAD</span>
+    <span class="dash-light"></span>
+    <span class="dash-label" id="dashStatus">STANDBY</span>
+  </div>
+
+  <div id="discWrap"><div id="disc"></div></div>
+
+  <div class="song-title" id="songTitle">亡命之徒</div>
+  <div class="song-artist" id="songArtist">Super Band</div>
+
+  <div id="spectrum"></div>
+
+  <div id="track"><div id="trackRoad"></div><div id="fill"></div></div>
+  <div id="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
+
+  <div id="controls">
+    <button class="ctrl-btn" id="prevBtn">&#9664;&#9664;</button>
+    <button class="ctrl-btn" id="playBtn">&#9654;</button>
+    <button class="ctrl-btn" id="nextBtn">&#9654;&#9654;</button>
+  </div>
+
+  <div id="volWrap">
+    <span id="volIcon">&#9835;</span>
+    <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" />
+  </div>
+</div>
+</div>
+
+<div id="lyricNext"></div>
+<div id="lyric"></div>
+
+<div id="hint">CLICK TO START</div>
+<div id="watermark">@CINEMATIC ROAD PLAYER</div>
+
+<audio id="audio" preload="auto" crossorigin="anonymous"></audio>
+
+<script>
+/* ============================================================
+   CINEMATIC ROAD MUSIC PLAYER
+   公路电影风格 · 荒漠公路 · 星空 · 月光 · 频谱霓虹
+   ============================================================ */
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+let W, H, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+/* ---- Playlist ---- */
+const playlist = [
+  { title: '亡命之徒', artist: 'Super Band', src: 'heisemaoyi.mp3', lrc: 'heisemaoyi.lrc' },
+  { title: '黑色毛衣', artist: 'Jay Chou', src: 'music/黑色毛衣.mp3', lrc: 'music/黑色毛衣.lrc' },
+  { title: '搬家', artist: 'Ayal Komod', src: 'music/搬家.mp3', lrc: 'music/搬家.lrc' },
+  { title: '坏女孩', artist: '徐良/小凌', src: 'music/坏女孩.mp3', lrc: 'music/坏女孩.lrc' }
+];
+let curIdx = 0;
+
+/* ---- Build playlist UI ---- */
+const plEl = document.getElementById('playlist');
+playlist.forEach((s, i) => {
+  const div = document.createElement('div');
+  div.className = 'pl-item' + (i === 0 ? ' active' : '');
+  div.innerHTML = `<span class="pl-num">${String(i+1).padStart(2,'0')}</span><span class="pl-name">${s.title} — ${s.artist}</span>`;
+  div.onclick = () => { loadSong(i); plEl.classList.remove('open'); };
+  plEl.appendChild(div);
+});
+
+document.getElementById('playlistToggle').onclick = (e) => {
+  e.stopPropagation();
+  plEl.classList.toggle('open');
+};
+
+/* ---- Audio ---- */
+const audioEl = document.getElementById('audio');
+let actx, analyser, freqData, srcNode, audioReady = false;
+
+function setupAudio() {
+  if (audioReady) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = actx.createAnalyser();
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = 0.78;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  srcNode = actx.createMediaElementSource(audioEl);
+  srcNode.connect(analyser);
+  analyser.connect(actx.destination);
+  audioReady = true;
+}
+
+function getEnergy() {
+  if (!audioReady || audioEl.paused) return { bass: 0, mid: 0, treble: 0, overall: 0 };
+  analyser.getByteFrequencyData(freqData);
+  const bins = analyser.frequencyBinCount;
+  let bass = 0, mid = 0, treble = 0;
+  const bassEnd = Math.floor(bins * 0.1);
+  const midEnd = Math.floor(bins * 0.4);
+  for (let i = 0; i < bassEnd; i++) bass += freqData[i];
+  for (let i = bassEnd; i < midEnd; i++) mid += freqData[i];
+  for (let i = midEnd; i < bins; i++) treble += freqData[i];
+  bass = bass / (bassEnd * 255);
+  mid = mid / ((midEnd - bassEnd) * 255);
+  treble = treble / ((bins - midEnd) * 255);
+  return { bass, mid, treble, overall: (bass + mid + treble) / 3 };
+}
+
+/* ---- Spectrum bars ---- */
+const specEl = document.getElementById('spectrum');
+const SPEC_BARS = 28;
+const specBars = [];
+for (let i = 0; i < SPEC_BARS; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'spec-bar';
+  specEl.appendChild(bar);
+  specBars.push(bar);
+}
+
+function updateSpectrum() {
+  if (!audioReady || audioEl.paused) {
+    for (const b of specBars) b.style.height = '2px';
+    return;
+  }
+  analyser.getByteFrequencyData(freqData);
+  const bins = analyser.frequencyBinCount;
+  const step = Math.floor(bins / SPEC_BARS);
+  for (let i = 0; i < SPEC_BARS; i++) {
+    let sum = 0;
+    for (let j = 0; j < step; j++) sum += freqData[i * step + j] || 0;
+    const avg = sum / step / 255;
+    const h = Math.max(2, avg * 40);
+    specBars[i].style.height = h + 'px';
+  }
+}
+
+/* ---- Stars ---- */
+let stars = [];
+function initStars() {
+  stars = [];
+  const n = Math.round((W * H) / 4000);
+  for (let i = 0; i < n; i++) {
+    const bright = Math.random();
+    stars.push({
+      x: Math.random() * W, y: Math.random() * H * 0.6,
+      r: bright > 0.93 ? 1.2 + Math.random() : Math.random() * 0.7 + 0.2,
+      tw: Math.random() * Math.PI * 2,
+      tws: 0.3 + Math.random() * 1.0,
+      color: ['#ffffff','#ffe9c8','#cfe6ff','#fff4d0'][(Math.random()*4)|0],
+      flare: bright > 0.96
+    });
+  }
+}
+initStars();
+addEventListener('resize', initStars);
+
+function drawStars(dt, energy) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const s of stars) {
+    const tw = 0.4 + 0.6 * Math.sin(t * s.tws + s.tw);
+    const pulse = 1 + energy.overall * 0.5;
+    const a = Math.min(1, (0.15 + tw * 0.5) * (0.5 + s.r * 0.3) * pulse);
+    const r = s.r * (1 + tw * 0.1) * (1 + energy.treble * 0.2);
+    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 3);
+    glow.addColorStop(0, s.color + Math.round(a*255).toString(16).padStart(2,'0'));
+    glow.addColorStop(1, s.color + '00');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(s.x, s.y, r * 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = s.color + Math.round(Math.min(1,a+0.1)*255).toString(16).padStart(2,'0');
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.fill();
+    if (s.flare) {
+      const fl = (r + tw) * 2 * (1 + energy.overall * 0.3);
+      ctx.strokeStyle = s.color + Math.round(a*0.4*255).toString(16).padStart(2,'0');
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(s.x - fl, s.y); ctx.lineTo(s.x + fl, s.y);
+      ctx.moveTo(s.x, s.y - fl); ctx.lineTo(s.x, s.y + fl);
+      ctx.stroke();
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Moon ---- */
+function drawMoon(energy) {
+  const t = performance.now() / 1000;
+  const mx = W * 0.78 + Math.cos(t * 0.02) * W * 0.04;
+  const my = H * 0.15 + Math.sin(t * 0.018) * H * 0.03;
+  const mr = Math.min(W, H) * 0.045;
+  const haloA = 0.08 + energy.mid * 0.08;
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 5);
+  halo.addColorStop(0, `rgba(240,230,200,${haloA})`);
+  halo.addColorStop(0.5, `rgba(220,200,160,${haloA*0.3})`);
+  halo.addColorStop(1, 'rgba(200,180,140,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(mx, my, mr * 5, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+  const g = ctx.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
+  g.addColorStop(0, '#f5f0e0');
+  g.addColorStop(0.6, '#d8d0c0');
+  g.addColorStop(1, '#a8a090');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(140,130,110,0.15)';
+  ctx.beginPath(); ctx.arc(mx + mr*0.2, my - mr*0.1, mr*0.12, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx - mr*0.15, my + mr*0.2, mr*0.08, 0, Math.PI*2); ctx.fill();
+}
+
+/* ---- Distant city lights ---- */
+let cityLights = [];
+function initCityLights() {
+  cityLights = [];
+  const horizonY = H * 0.58;
+  for (let i = 0; i < 40; i++) {
+    cityLights.push({
+      x: Math.random() * W,
+      y: horizonY - Math.random() * 15,
+      r: 0.5 + Math.random() * 1.5,
+      hue: [30, 40, 50, 200, 210][(Math.random()*5)|0],
+      tw: Math.random() * Math.PI * 2,
+      tws: 0.5 + Math.random()
+    });
+  }
+}
+initCityLights();
+addEventListener('resize', initCityLights);
+
+function drawCityLights(energy) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const c of cityLights) {
+    const tw = 0.5 + 0.5 * Math.sin(t * c.tws + c.tw);
+    const a = tw * (0.3 + energy.mid * 0.3);
+    ctx.fillStyle = `hsla(${c.hue}, 80%, 65%, ${a})`;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `hsla(${c.hue}, 90%, 80%, ${a * 0.3})`;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r * 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Desert highway ---- */
+let roadOffset = 0;
+function drawHighway(dt, energy) {
+  roadOffset += dt * (30 + energy.overall * 80 + energy.bass * 40);
+  const horizonY = H * 0.58;
+  const roadW = W * 0.5;
+  const vanishX = W * 0.5;
+
+  // Sky gradient
+  const skyG = ctx.createLinearGradient(0, 0, 0, horizonY);
+  skyG.addColorStop(0, '#0a0810');
+  skyG.addColorStop(0.5, '#120e10');
+  skyG.addColorStop(0.8, '#1a1410');
+  skyG.addColorStop(1, '#221810');
+  ctx.fillStyle = skyG;
+  ctx.fillRect(0, 0, W, horizonY);
+
+  // Distant glow
+  ctx.globalCompositeOperation = 'lighter';
+  const glowG = ctx.createRadialGradient(vanishX, horizonY, 0, vanishX, horizonY, W * 0.3);
+  glowG.addColorStop(0, `rgba(200,140,40,${0.06 + energy.bass * 0.1})`);
+  glowG.addColorStop(0.5, `rgba(180,120,30,${0.02 + energy.bass * 0.04})`);
+  glowG.addColorStop(1, 'rgba(150,100,20,0)');
+  ctx.fillStyle = glowG;
+  ctx.fillRect(0, 0, W, horizonY + 20);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Ground/desert
+  const groundG = ctx.createLinearGradient(0, horizonY, 0, H);
+  groundG.addColorStop(0, '#1a1410');
+  groundG.addColorStop(0.3, '#15110c');
+  groundG.addColorStop(1, '#0a0806');
+  ctx.fillStyle = groundG;
+  ctx.fillRect(0, horizonY, W, H - horizonY);
+
+  // Road
+  ctx.fillStyle = '#0e0c08';
+  ctx.beginPath();
+  ctx.moveTo(vanishX - 8, horizonY);
+  ctx.lineTo(vanishX + 8, horizonY);
+  ctx.lineTo(vanishX + roadW * 0.7, H);
+  ctx.lineTo(vanishX - roadW * 0.7, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Road edges
+  ctx.strokeStyle = 'rgba(120,90,50,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(vanishX - 8, horizonY);
+  ctx.lineTo(vanishX - roadW * 0.7, H);
+  ctx.moveTo(vanishX + 8, horizonY);
+  ctx.lineTo(vanishX + roadW * 0.7, H);
+  ctx.stroke();
+
+  // Center dashed yellow lines (perspective)
+  const dashLen = 40;
+  const gapLen = 30;
+  const totalLen = dashLen + gapLen;
+  const offset = roadOffset % totalLen;
+  for (let d = -totalLen; d < H + totalLen; d += totalLen) {
+    const y1 = horizonY + d + offset;
+    const y2 = y1 + dashLen;
+    if (y2 < horizonY || y1 > H) continue;
+    const t1 = (y1 - horizonY) / (H - horizonY);
+    const t2 = (y2 - horizonY) / (H - horizonY);
+    const x1 = vanishX;
+    const x2 = vanishX;
+    const w1 = Math.max(0.5, t1 * 4);
+    const w2 = Math.max(0.5, t2 * 4);
+    ctx.fillStyle = `rgba(220,180,40,${0.15 + t1 * 0.25})`;
+    ctx.beginPath();
+    ctx.moveTo(x1 - w1, y1); ctx.lineTo(x1 + w1, y1);
+    ctx.lineTo(x2 + w2, y2); ctx.lineTo(x2 - w2, y2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Telephone poles
+  drawPoles(dt);
+
+  // Dust particles
+  drawDust(dt, energy);
+}
+
+/* ---- Telephone poles ---- */
+let poles = [];
+function initPoles() {
+  poles = [];
+  for (let i = 0; i < 8; i++) {
+    poles.push({ dist: i * 0.15 + 0.05, side: -1 });
+    poles.push({ dist: i * 0.15 + 0.05, side: 1 });
+  }
+}
+initPoles();
+addEventListener('resize', initPoles);
+
+function drawPoles(dt) {
+  const horizonY = H * 0.58;
+  for (const p of poles) {
+    p.dist += dt * 0.04;
+    if (p.dist > 1.2) p.dist -= 1.2;
+    const t = p.dist;
+    const y = horizonY + t * (H - horizonY);
+    const xOff = p.side * (W * 0.15 + t * W * 0.35);
+    const x = W * 0.5 + xOff;
+    const scale = t * t;
+    const poleH = scale * 80;
+    const poleW = Math.max(0.5, scale * 3);
+    if (poleH < 2) continue;
+    ctx.fillStyle = `rgba(30,22,14,${0.3 + t * 0.3})`;
+    ctx.fillRect(x - poleW/2, y - poleH, poleW, poleH);
+    // Crossbar
+    ctx.fillRect(x - poleW * 2.5, y - poleH, poleW * 5, poleW * 0.7);
+    // Wires
+    ctx.strokeStyle = `rgba(30,22,14,${0.12 + t * 0.15})`;
+    ctx.lineWidth = Math.max(0.3, scale * 0.8);
+    ctx.beginPath();
+    ctx.moveTo(x - poleW * 2, y - poleH + poleW);
+    ctx.quadraticCurveTo(x - poleW * 2, y - poleH * 0.5, x - poleW * 2, y);
+    ctx.moveTo(x + poleW * 2, y - poleH + poleW);
+    ctx.quadraticCurveTo(x + poleW * 2, y - poleH * 0.5, x + poleW * 2, y);
+    ctx.stroke();
+  }
+}
+
+/* ---- Dust particles ---- */
+let dust = [];
+function initDust() {
+  dust = [];
+  for (let i = 0; i < 35; i++) {
+    dust.push({
+      x: Math.random() * W, y: H * 0.55 + Math.random() * H * 0.45,
+      vx: 8 + Math.random() * 20,
+      vy: (Math.random() - 0.5) * 3,
+      r: 0.3 + Math.random() * 1.2,
+      a: 0.05 + Math.random() * 0.1
+    });
+  }
+}
+initDust();
+addEventListener('resize', initDust);
+
+function drawDust(dt, energy) {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const d of dust) {
+    d.x += d.vx * dt * (1 + energy.overall * 0.5);
+    d.y += d.vy * dt;
+    if (d.x > W + 10) { d.x = -10; d.y = H * 0.55 + Math.random() * H * 0.45; }
+    const a = d.a * (1 + energy.mid * 0.5);
+    ctx.fillStyle = `rgba(200,170,100,${a})`;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Gas station neon sign ---- */
+function drawNeSign(energy) {
+  const t = performance.now() / 1000;
+  const x = W * 0.12;
+  const y = H * 0.52;
+  const flicker = 0.7 + 0.3 * Math.sin(t * 8) * Math.sin(t * 13);
+  const a = flicker * (0.15 + energy.bass * 0.15);
+  ctx.globalCompositeOperation = 'lighter';
+  // Neon glow
+  const g = ctx.createRadialGradient(x, y, 0, x, y, 60);
+  g.addColorStop(0, `rgba(255,140,30,${a})`);
+  g.addColorStop(0.4, `rgba(255,120,20,${a * 0.3})`);
+  g.addColorStop(1, 'rgba(255,100,10,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, 60, 0, Math.PI * 2); ctx.fill();
+  // Neon text
+  ctx.font = 'bold 14px "Courier New", monospace';
+  ctx.fillStyle = `rgba(255,160,40,${a * 1.5})`;
+  ctx.textAlign = 'center';
+  ctx.fillText('GAS', x, y - 4);
+  ctx.font = 'bold 10px "Courier New", monospace';
+  ctx.fillText('24H', x, y + 10);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Clouds (slow drifting) ---- */
+function drawClouds() {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  const clouds = [
+    { x: 0.2, y: 0.15, w: 0.25, h: 0.04, speed: 0.003 },
+    { x: 0.6, y: 0.22, w: 0.3, h: 0.05, speed: 0.002 },
+    { x: 0.85, y: 0.1, w: 0.2, h: 0.03, speed: 0.004 }
+  ];
+  for (const c of clouds) {
+    const cx = ((c.x + t * c.speed) % 1.2 - 0.1) * W;
+    const cy = c.y * H;
+    const cw = c.w * W;
+    const ch = c.h * H;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, cw);
+    g.addColorStop(0, 'rgba(60,50,40,0.06)');
+    g.addColorStop(0.5, 'rgba(50,40,30,0.03)');
+    g.addColorStop(1, 'rgba(40,30,20,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(cx, cy, cw, ch, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Background ---- */
+function drawBackground() {
+  ctx.fillStyle = '#06040a';
+  ctx.fillRect(0, 0, W, H);
+}
+
+/* ---- Lyrics ---- */
+let lyrics = [], curLyric = -1;
+const lyricEl = document.getElementById('lyric');
+const lyricNextEl = document.getElementById('lyricNext');
+
+async function loadLyrics(lrcFile) {
+  try {
+    const text = await (await fetch(lrcFile)).text();
+    const skip = ['词：', '曲：', '编曲', '制作', '人：', '和声', '混音', '母带', '监制', '男：', '女：'];
+    const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)/;
+    lyrics = text.split(/\r?\n/).map(l => {
+      const m = l.match(re); if (!m) return null;
+      const t = m[4].trim(); if (!t || skip.some(s => t.includes(s))) return null;
+      const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+      return { time: +m[1] * 60 + +m[2] + frac, text: t };
+    }).filter(Boolean).sort((a, b) => a.time - b.time);
+  } catch (e) { lyrics = []; }
+}
+
+function updateLyrics(t) {
+  if (!lyrics.length) return;
+  let idx = -1;
+  for (let i = 0; i < lyrics.length; i++) {
+    if (t >= lyrics[i].time) idx = i; else break;
+  }
+  if (idx !== curLyric) {
+    curLyric = idx;
+    lyricEl.classList.remove('show');
+    setTimeout(() => {
+      lyricEl.textContent = idx >= 0 ? lyrics[idx].text : '';
+      if (lyricEl.textContent) lyricEl.classList.add('show');
+    }, 200);
+    lyricNextEl.textContent = (idx + 1 < lyrics.length) ? lyrics[idx + 1].text : '';
+  }
+}
+
+/* ---- Player controls ---- */
+const playBtn = document.getElementById('playBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const volSlider = document.getElementById('vol');
+const disc = document.getElementById('disc');
+const songTitleEl = document.getElementById('songTitle');
+const songArtistEl = document.getElementById('songArtist');
+const fillEl = document.getElementById('fill');
+const curTimeEl = document.getElementById('curTime');
+const durTimeEl = document.getElementById('durTime');
+const dashStatus = document.getElementById('dashStatus');
+const titleCard = document.getElementById('titleCard');
+
+function fmtTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+async function loadSong(idx) {
+  curIdx = idx;
+  const s = playlist[idx];
+  audioEl.src = s.src;
+  songTitleEl.textContent = s.title;
+  songArtistEl.textContent = s.artist;
+  curLyric = -1;
+  lyricEl.textContent = '';
+  lyricNextEl.textContent = '';
+  await loadLyrics(s.lrc);
+  document.querySelectorAll('.pl-item').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  if (audioReady && actx.state === 'suspended') actx.resume();
+  audioEl.play().catch(() => {});
+}
+
+function togglePlay() {
+  setupAudio();
+  if (actx.state === 'suspended') actx.resume();
+  if (audioEl.paused) {
+    audioEl.play();
+  } else {
+    audioEl.pause();
+  }
+}
+
+playBtn.onclick = (e) => { e.stopPropagation(); togglePlay(); };
+prevBtn.onclick = (e) => { e.stopPropagation(); loadSong((curIdx - 1 + playlist.length) % playlist.length); };
+nextBtn.onclick = (e) => { e.stopPropagation(); loadSong((curIdx + 1) % playlist.length); };
+
+volSlider.oninput = () => { audioEl.volume = parseFloat(volSlider.value); };
+audioEl.volume = 0.8;
+
+audioEl.addEventListener('play', () => {
+  playBtn.innerHTML = '&#10074;&#10074;';
+  playBtn.classList.add('playing');
+  disc.classList.add('playing');
+  dashStatus.textContent = 'PLAYING';
+  document.getElementById('hint').classList.add('fade');
+});
+audioEl.addEventListener('pause', () => {
+  playBtn.innerHTML = '&#9654;';
+  playBtn.classList.remove('playing');
+  disc.classList.remove('playing');
+  dashStatus.textContent = 'PAUSED';
+});
+audioEl.addEventListener('ended', () => {
+  loadSong((curIdx + 1) % playlist.length);
+});
+audioEl.addEventListener('timeupdate', () => {
+  const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
+  fillEl.style.width = pct + '%';
+  curTimeEl.textContent = fmtTime(audioEl.currentTime);
+  durTimeEl.textContent = fmtTime(audioEl.duration);
+  updateLyrics(audioEl.currentTime);
+});
+
+/* ---- Progress bar click ---- */
+document.getElementById('track').onclick = (e) => {
+  if (!audioEl.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audioEl.currentTime = pct * audioEl.duration;
+};
+
+/* ---- Click to show/hide player ---- */
+let playerVisible = true;
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#player') || e.target.closest('#playlist')) return;
+  playerVisible = !playerVisible;
+  document.getElementById('playerWrap').classList.toggle('hidden', !playerVisible);
+});
+
+/* ---- Init ---- */
+loadSong(0);
+setTimeout(() => titleCard.classList.add('show'), 500);
+setTimeout(() => titleCard.classList.remove('show'), 5000);
+
+/* ---- Main loop ---- */
+let lastT = performance.now();
+function loop() {
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+
+  const energy = getEnergy();
+  document.documentElement.style.setProperty('--bass', energy.bass.toFixed(3));
+  document.documentElement.style.setProperty('--mid', energy.mid.toFixed(3));
+  document.documentElement.style.setProperty('--treble', energy.treble.toFixed(3));
+
+  drawBackground();
+  drawClouds();
+  drawStars(dt, energy);
+  drawMoon(energy);
+  drawHighway(dt, energy);
+  drawCityLights(energy);
+  drawNeSign(energy);
+  updateSpectrum();
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
 </html>
