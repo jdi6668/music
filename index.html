@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>星空夜语 · 助眠音乐</title>
+<title>夏夜草语 · 助眠音乐</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; overflow: hidden; background: #02030a;
+  html, body { height: 100%; overflow: hidden; background: #050a08;
     font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
   canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
 
@@ -24,22 +24,22 @@
   #player {
     position: relative;
     width: 340px; padding: 38px 32px 32px; text-align: center;
-    background: linear-gradient(165deg, rgba(18, 22, 42, 0.6), rgba(10, 12, 26, 0.55));
-    backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%);
-    border: 1px solid rgba(160, 185, 240, 0.16);
+    background: linear-gradient(165deg, rgba(18, 32, 24, 0.55), rgba(10, 20, 14, 0.5));
+    backdrop-filter: blur(24px) saturate(130%); -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border: 1px solid rgba(120, 200, 140, 0.14);
     border-radius: 28px;
     box-shadow:
       0 10px 70px rgba(10, 14, 34, 0.55),
       0 0 0 1px rgba(255,255,255,0.03) inset,
-      0 0 90px rgba(123, 108, 196, calc(0.10 + var(--bass) * 0.35)),
-      0 0 50px rgba(107, 214, 255, calc(0.06 + var(--mid) * 0.25));
+      0 0 90px rgba(100, 200, 120, calc(0.08 + var(--bass) * 0.30)),
+      0 0 50px rgba(180, 240, 160, calc(0.05 + var(--mid) * 0.20));
     transition: box-shadow 0.15s ease, transform 0.35s ease;
     transform-style: preserve-3d;
     overflow: hidden;
   }
   #player::before {
     content: ''; position: absolute; inset: -1px; border-radius: 28px; padding: 1px;
-    background: conic-gradient(from calc(var(--bass) * 360deg), #6bd6ff, #7b6cc4, #ff8fd0, #6bd6ff);
+    background: conic-gradient(from calc(var(--bass) * 360deg), #6bcf7f, #a8e6a0, #ffd56b, #6bcf7f);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude;
@@ -56,12 +56,12 @@
     width: 168px; height: 168px; border-radius: 50%; margin: 0 auto 26px;
     background:
       repeating-radial-gradient(circle, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 2px, transparent 5px),
-      conic-gradient(from 0deg, #1a1a2e, #16213e, #0f3460, #1a1a2e);
+      conic-gradient(from 0deg, #1a2e1e, #162e1e, #0f3a20, #1a2e1e);
     position: relative;
     box-shadow:
       0 0 0 1px rgba(255,255,255,0.05),
       0 8px 32px rgba(0,0,0,0.5),
-      0 0 calc(20px + var(--bass) * 50px) rgba(123, 108, 196, calc(0.25 + var(--bass) * 0.45)),
+      0 0 calc(20px + var(--bass) * 50px) rgba(100, 200, 120, calc(0.20 + var(--bass) * 0.40)),
       inset 0 0 24px rgba(0,0,0,0.65);
     animation: spin 20s linear infinite;
     animation-play-state: paused;
@@ -70,47 +70,47 @@
   #disc.playing { animation-play-state: running; }
   #disc::before {
     content: ''; position: absolute; inset: 32px; border-radius: 50%;
-    background: radial-gradient(circle at 40% 35%, #3a3a5e 0%, #1a1a3e 60%, #0a0a1e 100%);
+    background: radial-gradient(circle at 40% 35%, #3a5e3e 0%, #1a3e1e 60%, #0a1e0e 100%);
     box-shadow: inset 0 0 12px rgba(0,0,0,0.6), inset 0 0 2px rgba(255,255,255,0.15);
   }
   #disc::after {
     content: ''; position: absolute; left: 50%; top: 50%;
     width: 12px; height: 12px; border-radius: 50%;
-    background: #6bd6ff; transform: translate(-50%, -50%);
-    box-shadow: 0 0 12px rgba(107, 214, 255, 0.6), 0 0 24px rgba(107, 214, 255, calc(0.3 + var(--bass) * 0.5));
+    background: #a8e6a0; transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px rgba(168, 230, 160, 0.6), 0 0 24px rgba(168, 230, 160, calc(0.3 + var(--bass) * 0.5));
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .song-title {
     font-size: 19px; font-weight: 700; letter-spacing: 2px;
     margin-bottom: 5px;
-    background: linear-gradient(90deg, #bcd4ff, #e8d8ff, #ffd8ec, #bcd4ff);
+    background: linear-gradient(90deg, #a8e6a0, #d4f0c0, #ffd56b, #a8e6a0);
     background-size: 300% auto;
     -webkit-background-clip: text; background-clip: text; color: transparent;
     animation: titleShine 8s linear infinite;
-    filter: drop-shadow(0 0 16px rgba(120, 140, 220, 0.35));
+    filter: drop-shadow(0 0 16px rgba(120, 200, 130, 0.35));
   }
   @keyframes titleShine { to { background-position: -300% center; } }
   .song-sub {
-    color: rgba(180, 200, 240, 0.4); font-size: 12px; letter-spacing: 3px;
+    color: rgba(160, 220, 170, 0.4); font-size: 12px; letter-spacing: 3px;
     margin-bottom: 24px;
   }
 
   /* 进度条 */
   #track {
-    width: 100%; height: 6px; background: rgba(100, 120, 180, 0.15);
+    width: 100%; height: 6px; background: rgba(60, 100, 70, 0.15);
     border-radius: 6px; overflow: visible; cursor: pointer; margin-bottom: 10px;
     position: relative;
   }
   #track::before {
     content: ''; position: absolute; inset: 0; border-radius: 6px; overflow: hidden;
-    background: rgba(100, 120, 180, 0.12);
+    background: rgba(60, 100, 70, 0.12);
   }
   #fill {
     height: 100%; width: 0%; border-radius: 6px;
-    background: linear-gradient(90deg, #4a8fd6, #7b6cc4, #ff8fd0);
+    background: linear-gradient(90deg, #5ba870, #a8e6a0, #ffd56b);
     background-size: 200% auto;
-    box-shadow: 0 0 14px rgba(130, 150, 220, 0.55);
+    box-shadow: 0 0 14px rgba(120, 200, 130, 0.50);
     transition: width 0.15s linear;
     position: relative;
     animation: fillShift 4s linear infinite;
@@ -119,13 +119,13 @@
   #fill::after {
     content: ''; position: absolute; right: -3px; top: 50%; transform: translateY(-50%);
     width: 10px; height: 10px; border-radius: 50%;
-    background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 18px rgba(150,170,255,0.7);
+    background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 18px rgba(168,230,160,0.7);
     opacity: 0; transition: opacity 0.25s ease;
   }
   #track:hover #fill::after { opacity: 1; }
   #times {
     display: flex; justify-content: space-between;
-    color: rgba(180, 200, 240, 0.35); font-size: 11px; letter-spacing: 1px;
+    color: rgba(160, 220, 170, 0.35); font-size: 11px; letter-spacing: 1px;
     margin-bottom: 24px;
   }
 
@@ -135,15 +135,15 @@
   }
   .ctrl-btn {
     width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer;
-    background: rgba(60, 80, 140, 0.15); color: rgba(200, 220, 255, 0.65);
+    background: rgba(50, 90, 60, 0.15); color: rgba(180, 230, 190, 0.65);
     font-size: 16px; display: flex; align-items: center; justify-content: center;
     transition: all 0.25s ease; position: relative; overflow: hidden;
     box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset;
   }
   .ctrl-btn:hover {
-    background: rgba(80, 110, 180, 0.28); color: #e0e8ff;
+    background: rgba(70, 130, 90, 0.28); color: #d8f0d8;
     transform: scale(1.1);
-    box-shadow: 0 0 18px rgba(120, 140, 220, 0.35), 0 0 0 1px rgba(255,255,255,0.08) inset;
+    box-shadow: 0 0 18px rgba(100, 200, 120, 0.35), 0 0 0 1px rgba(255,255,255,0.08) inset;
   }
   .ctrl-btn:active { transform: scale(0.94); }
   .ripple {
@@ -153,18 +153,18 @@
   @keyframes rippleAnim { to { transform: scale(2.6); opacity: 0; } }
   #playBtn {
     width: 64px; height: 64px; font-size: 23px;
-    background: linear-gradient(135deg, #4a8fd6, #7b6cc4);
+    background: linear-gradient(135deg, #5ba870, #a8c070);
     color: #fff; position: relative;
-    box-shadow: 0 4px 28px rgba(80, 110, 180, 0.4), 0 0 0 1px rgba(255,255,255,0.08) inset;
+    box-shadow: 0 4px 28px rgba(70, 140, 90, 0.4), 0 0 0 1px rgba(255,255,255,0.08) inset;
   }
   #playBtn:hover {
-    background: linear-gradient(135deg, #5a9fe6, #8b7cd4);
-    box-shadow: 0 4px 36px rgba(100, 130, 200, 0.55), 0 0 0 1px rgba(255,255,255,0.1) inset;
+    background: linear-gradient(135deg, #6bb880, #b8d080);
+    box-shadow: 0 4px 36px rgba(90, 160, 110, 0.55), 0 0 0 1px rgba(255,255,255,0.1) inset;
     transform: scale(1.08);
   }
   #playBtn.playing::before, #playBtn.playing::after {
     content: ''; position: absolute; inset: 0; border-radius: 50%;
-    border: 1.5px solid rgba(130, 160, 255, 0.55);
+    border: 1.5px solid rgba(130, 220, 150, 0.55);
     animation: pulseRing 2.2s ease-out infinite;
     pointer-events: none;
   }
@@ -179,37 +179,37 @@
     display: flex; align-items: center; gap: 8px;
     margin-top: 20px; justify-content: center;
   }
-  #volIcon { color: rgba(180, 200, 240, 0.4); font-size: 14px; }
+  #volIcon { color: rgba(160, 220, 170, 0.4); font-size: 14px; }
   #vol {
     width: 84px; height: 3px; -webkit-appearance: none; appearance: none;
-    background: rgba(100, 120, 180, 0.18); border-radius: 3px; outline: none;
+    background: rgba(60, 100, 70, 0.18); border-radius: 3px; outline: none;
     transition: background 0.2s ease;
   }
-  #vol:hover { background: rgba(100, 120, 180, 0.3); }
+  #vol:hover { background: rgba(60, 100, 70, 0.3); }
   #vol::-webkit-slider-thumb {
     -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
-    background: #6bd6ff; cursor: pointer; box-shadow: 0 0 8px rgba(107,214,255,0.6);
+    background: #a8e6a0; cursor: pointer; box-shadow: 0 0 8px rgba(168,230,160,0.6);
     transition: box-shadow 0.2s ease;
   }
-  #vol::-webkit-slider-thumb:hover { box-shadow: 0 0 14px rgba(107,214,255,0.9); }
+  #vol::-webkit-slider-thumb:hover { box-shadow: 0 0 14px rgba(168,230,160,0.9); }
   #vol::-moz-range-thumb {
     width: 13px; height: 13px; border-radius: 50%; border: none;
-    background: #6bd6ff; cursor: pointer; box-shadow: 0 0 8px rgba(107,214,255,0.6);
+    background: #a8e6a0; cursor: pointer; box-shadow: 0 0 8px rgba(168,230,160,0.6);
   }
 
   /* 歌词 */
   #lyric {
     position: fixed; left: 0; right: 0; bottom: 14%; text-align: center;
-    color: #e8ecff; font-size: clamp(20px, 4.5vw, 38px); font-weight: 400; letter-spacing: 3px;
+    color: #e0f0d8; font-size: clamp(20px, 4.5vw, 38px); font-weight: 400; letter-spacing: 3px;
     padding: 0 24px; z-index: 6; pointer-events: none;
     opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(5px);
     transition: opacity 0.9s ease, transform 0.9s ease, filter 0.9s ease;
-    text-shadow: 0 0 22px rgba(140,170,240,0.5), 0 0 50px rgba(120,100,200,0.3);
+    text-shadow: 0 0 22px rgba(140,220,150,0.5), 0 0 50px rgba(100,180,110,0.3);
   }
   #lyric.show { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
   #lyricNext {
     position: fixed; left: 0; right: 0; bottom: 7%; text-align: center;
-    color: rgba(200,215,255,0.35); font-size: clamp(13px, 2.8vw, 19px); letter-spacing: 2px;
+    color: rgba(180,220,180,0.35); font-size: clamp(13px, 2.8vw, 19px); letter-spacing: 2px;
     padding: 0 24px; z-index: 6; pointer-events: none;
     transition: opacity 0.7s ease;
   }
@@ -217,7 +217,7 @@
   /* 唤出提示 */
   #hint {
     position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-    color: rgba(180, 200, 240, 0.25); font-size: 12px; letter-spacing: 4px;
+    color: rgba(160, 220, 170, 0.25); font-size: 12px; letter-spacing: 4px;
     z-index: 9; pointer-events: none; transition: opacity 0.5s ease;
   }
   #hint.fade { opacity: 0; }
@@ -225,7 +225,7 @@
   /* 水印 */
   #watermark {
     position: fixed; right: 16px; bottom: 12px; z-index: 9;
-    color: rgba(180, 200, 240, 0.22); font-size: 10px; letter-spacing: 1px;
+    color: rgba(160, 220, 170, 0.22); font-size: 10px; letter-spacing: 1px;
     pointer-events: none; user-select: none;
   }
 </style>
@@ -237,7 +237,7 @@
 <div id="player">
   <div id="disc"></div>
   <div class="song-title">搬家</div>
-  <div class="song-sub">夜 深 了 · 好 梦</div>
+  <div class="song-sub">夏 夜 草 地 · 静 谧</div>
   <div id="track"><div id="fill"></div></div>
   <div id="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
   <div id="controls">
@@ -262,8 +262,8 @@
 
 <script>
 /* ============================================================
-   星空夜语 —— 助眠音乐播放器
-   流星雨背景 (随旋律律动) · 闪烁星空 · 月光 · 萤火虫 · 歌词
+   夏夜草语 —— 助眠音乐播放器
+   夏夜草地背景 · 萤火虫 · 草地剪影 · 歌词粒子
    ============================================================ */
 const canvas = document.getElementById('cv');
 const ctx = canvas.getContext('2d');
@@ -277,31 +277,43 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-/* ---- 星空 ---- */
-const STAR_COLORS = ['#ffffff', '#cfe6ff', '#e8d8ff', '#ffe9b8', '#bfeaff'];
-let stars = [];
-function initStars() {
-  stars = [];
-  const n = Math.round((W * H) / 3500);
+/* ---- 草地剪影 ---- */
+let grassBlades = [];
+function initGrass() {
+  grassBlades = [];
+  const n = Math.round(W / 12);
   for (let i = 0; i < n; i++) {
-    const bright = Math.random();
-    stars.push({
-      x: Math.random() * W, y: Math.random() * H,
-      bx: 0, by: 0,
-      r: bright > 0.95 ? 1.4 + Math.random() * 1.2 : Math.random() * 0.9 + 0.2,
-      tw: Math.random() * Math.PI * 2,
-      tws: 0.3 + Math.random() * 1.2,
-      color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
-      flare: bright > 0.97,
-      phase: Math.random() * Math.PI * 2,
-      freq: 0.5 + Math.random() * 1.5,
-      trail: [],
-      trailTimer: 0
+    grassBlades.push({
+      x: (i / n) * W + (Math.random() - 0.5) * 14,
+      h: 30 + Math.random() * 80,
+      sway: Math.random() * Math.PI * 2,
+      swaySpeed: 0.3 + Math.random() * 0.5,
+      hue: 100 + Math.random() * 40,
+      lit: 0.15 + Math.random() * 0.2,
+      tilt: (Math.random() - 0.5) * 0.3
     });
   }
 }
-initStars();
-addEventListener('resize', initStars);
+initGrass();
+addEventListener('resize', initGrass);
+
+function drawGrass(dt, energy) {
+  const t = performance.now() / 1000;
+  const baseY = H + 5;
+  for (const b of grassBlades) {
+    b.sway += dt * b.swaySpeed;
+    const swayX = Math.sin(b.sway) * 6 * (1 + energy.mid * 0.5);
+    const tipX = b.x + swayX + b.tilt * b.h;
+    const tipY = baseY - b.h;
+    ctx.strokeStyle = `hsla(${b.hue}, 50%, ${10 + b.lit * 100}%, ${0.4 + b.lit * 0.3})`;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(b.x, baseY);
+    ctx.quadraticCurveTo(b.x + swayX * 0.5, baseY - b.h * 0.5, tipX, tipY);
+    ctx.stroke();
+  }
+}
 
 /* ---- 音频分析 ---- */
 const audioEl = document.getElementById('audio');
@@ -338,175 +350,30 @@ function getEnergy() {
   return { bass, mid, treble, overall: (bass + mid + treble) / 3 };
 }
 
-/* ---- 流星 (随旋律律动, 浪漫飘逸风) ---- */
-const meteors = [];
-const meteorSparks = [];
-let meteorTimer = 0;
-let smoothBass = 0, smoothMid = 0, smoothTreble = 0;
-const METEOR_HUES = [330, 300, 270, 40, 200, 180];
-
-function spawnMeteor(energy) {
-  const fromLeft = Math.random() < 0.6;
-  const startY = Math.random() * H * 0.45;
-  // 速度随整体能量变化: 整体放慢, 仍保留节奏感
-  const baseSpeed = 70 + energy.overall * 230 + energy.bass * 90;
-  const speed = baseSpeed + Math.random() * 30;
-  const angle = 0.28 + Math.random() * 0.18;
-  // 大小随低频和中频变化
-  const width = 1 + energy.bass * 3 + energy.mid * 1.3 + Math.random() * 0.8;
-  const len = 90 + energy.overall * 180 + energy.treble * 100 + Math.random() * 70;
-  // 色相从浪漫色系中随机选取, 再叠加能量偏移
-  const baseHue = METEOR_HUES[(Math.random() * METEOR_HUES.length) | 0];
-  const hue = baseHue + energy.mid * 20 + Math.random() * 14 - 7;
-  const vx = (fromLeft ? 1 : -1) * speed * Math.cos(angle);
-  const vy = speed * Math.sin(angle);
-  const dist = W + 220;
-  const travelSpeed = Math.hypot(vx, vy) || 1;
-  meteors.push({
-    x: fromLeft ? -100 : W + 100,
-    y: startY,
-    vx, vy,
-    life: 0,
-    max: (dist / travelSpeed) * (0.55 + Math.random() * 0.25),
-    len: len,
-    hue: hue,
-    width: width,
-    brightness: 0.55 + energy.overall * 0.45,
-    sparkTimer: 0
-  });
-}
-
-function spawnSpark(m) {
-  const ang = Math.atan2(m.vy, m.vx);
-  const backX = m.x - Math.cos(ang) * m.len * (0.3 + Math.random() * 0.5);
-  const backY = m.y - Math.sin(ang) * m.len * (0.3 + Math.random() * 0.5);
-  meteorSparks.push({
-    x: backX + (Math.random() - 0.5) * 6,
-    y: backY + (Math.random() - 0.5) * 6,
-    vx: (Math.random() - 0.5) * 10,
-    vy: (Math.random() - 0.5) * 10 + 4,
-    life: 0,
-    max: 0.5 + Math.random() * 0.6,
-    r: 0.6 + Math.random() * 1.4,
-    hue: m.hue + (Math.random() - 0.5) * 20
-  });
-}
-
-function updateMeteors(dt, energy) {
-  // 平滑能量值
-  smoothBass += (energy.bass - smoothBass) * 0.15;
-  smoothMid += (energy.mid - smoothMid) * 0.15;
-  smoothTreble += (energy.treble - smoothTreble) * 0.15;
-
-  meteorTimer -= dt;
-  // 生成频率随能量变化: 安静时稀疏, 高潮时密集, 整体节奏放慢
-  const spawnInterval = Math.max(0.35, 3.6 - energy.overall * 2.6 - energy.bass * 1.0);
-  if (meteorTimer <= 0) {
-    spawnMeteor(energy);
-    // 高能量时可能一次生成多颗
-    if (energy.overall > 0.55 && Math.random() < energy.overall * 0.4) spawnMeteor(energy);
-    meteorTimer = spawnInterval + Math.random() * 0.8;
-  }
-  for (const m of meteors) {
-    m.x += m.vx * dt;
-    m.y += m.vy * dt;
-    m.life += dt;
-    m.sparkTimer -= dt;
-    if (m.sparkTimer <= 0) {
-      spawnSpark(m);
-      m.sparkTimer = 0.02 + Math.random() * 0.02;
-    }
-  }
-  for (let i = meteors.length - 1; i >= 0; i--) {
-    if (meteors[i].life > meteors[i].max) meteors.splice(i, 1);
-  }
-  for (const s of meteorSparks) {
-    s.x += s.vx * dt;
-    s.y += s.vy * dt;
-    s.vy += 6 * dt;
-    s.life += dt;
-  }
-  for (let i = meteorSparks.length - 1; i >= 0; i--) {
-    if (meteorSparks[i].life > meteorSparks[i].max) meteorSparks.splice(i, 1);
-  }
-}
-
-function drawMeteors() {
-  ctx.globalCompositeOperation = 'lighter';
-  for (const m of meteors) {
-    const p = m.life / m.max;
-    const a = Math.sin(Math.min(1, p) * Math.PI) * (0.6 + m.brightness * 0.4);
-    const ang = Math.atan2(m.vy, m.vx);
-    const tx = m.x - Math.cos(ang) * m.len;
-    const ty = m.y - Math.sin(ang) * m.len;
-    const g = ctx.createLinearGradient(m.x, m.y, tx, ty);
-    g.addColorStop(0, `hsla(${m.hue}, 90%, 88%, ${a})`);
-    g.addColorStop(0.3, `hsla(${m.hue}, 85%, 75%, ${a * 0.5})`);
-    g.addColorStop(1, `hsla(${m.hue}, 80%, 60%, 0)`);
-    ctx.strokeStyle = g;
-    ctx.lineWidth = m.width;
-    ctx.lineCap = 'round';
-    ctx.shadowColor = `hsl(${m.hue}, 90%, 78%)`;
-    ctx.shadowBlur = 8 + m.width * 4;
-    ctx.beginPath();
-    ctx.moveTo(m.x, m.y);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
-    // 头部柔光晕
-    const headGlow = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.width * 5);
-    headGlow.addColorStop(0, `hsla(${m.hue}, 100%, 95%, ${a})`);
-    headGlow.addColorStop(0.4, `hsla(${m.hue}, 95%, 85%, ${a * 0.4})`);
-    headGlow.addColorStop(1, `hsla(${m.hue}, 90%, 70%, 0)`);
-    ctx.fillStyle = headGlow;
-    ctx.beginPath();
-    ctx.arc(m.x, m.y, m.width * 5, 0, Math.PI * 2);
-    ctx.fill();
-    // 头部亮点
-    ctx.beginPath();
-    ctx.arc(m.x, m.y, m.width * 1.8, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${m.hue}, 100%, 93%, ${a})`;
-    ctx.fill();
-  }
-  ctx.shadowBlur = 0;
-  // 闪烁尘埃余晖
-  for (const s of meteorSparks) {
-    const p = s.life / s.max;
-    const a = (1 - p) * 0.7;
-    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 4);
-    glow.addColorStop(0, `hsla(${s.hue}, 95%, 90%, ${a})`);
-    glow.addColorStop(1, `hsla(${s.hue}, 90%, 75%, 0)`);
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r * 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = `hsla(${s.hue}, 100%, 95%, ${a})`;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-/* ---- 萤火虫 ---- */
+/* ---- 萤火虫 (增强版) ---- */
 const fireflies = [];
 function initFireflies() {
   fireflies.length = 0;
-  const n = 25;
+  const n = 50;
   for (let i = 0; i < n; i++) {
     fireflies.push({
-      x: Math.random() * W, y: Math.random() * H,
-      vx: (Math.random() - 0.5) * 15,
-      vy: (Math.random() - 0.5) * 10,
+      x: Math.random() * W, y: Math.random() * H * 0.85,
+      vx: (Math.random() - 0.5) * 12,
+      vy: (Math.random() - 0.5) * 8,
       phase: Math.random() * Math.PI * 2,
-      speed: 0.5 + Math.random() * 1.0,
-      r: 1 + Math.random() * 1.5
+      speed: 0.3 + Math.random() * 0.8,
+      r: 1 + Math.random() * 1.8,
+      hue: 55 + Math.random() * 25,
+      blinkDur: 2 + Math.random() * 4,
+      blinkTimer: Math.random() * 5,
+      brightness: 0
     });
   }
 }
 initFireflies();
 addEventListener('resize', initFireflies);
 
-function drawFireflies(dt) {
+function drawFireflies(dt, energy) {
   const t = performance.now() / 1000;
   ctx.globalCompositeOperation = 'lighter';
   for (const f of fireflies) {
@@ -514,25 +381,34 @@ function drawFireflies(dt) {
     f.y += f.vy * dt;
     f.phase += dt * f.speed;
     // 缓慢游荡
-    f.vx += (Math.random() - 0.5) * 8 * dt;
-    f.vy += (Math.random() - 0.5) * 5 * dt;
-    f.vx = Math.max(-20, Math.min(20, f.vx));
-    f.vy = Math.max(-15, Math.min(15, f.vy));
+    f.vx += (Math.random() - 0.5) * 6 * dt;
+    f.vy += (Math.random() - 0.5) * 4 * dt;
+    f.vx = Math.max(-15, Math.min(15, f.vx));
+    f.vy = Math.max(-10, Math.min(10, f.vy));
     // 边界回绕
     if (f.x < -10) f.x = W + 10;
     if (f.x > W + 10) f.x = -10;
-    if (f.y < -10) f.y = H + 10;
-    if (f.y > H + 10) f.y = -10;
-    const glow = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(f.phase));
-    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 6);
-    g.addColorStop(0, `rgba(180, 220, 150, ${glow * 0.6})`);
-    g.addColorStop(0.5, `rgba(150, 200, 120, ${glow * 0.15})`);
-    g.addColorStop(1, 'rgba(100, 150, 80, 0)');
+    if (f.y < -10) f.y = H * 0.9;
+    if (f.y > H * 0.9) f.y = -10;
+    // 闪烁逻辑
+    f.blinkTimer -= dt;
+    if (f.blinkTimer <= 0) {
+      f.blinkTimer = f.blinkDur;
+    }
+    const blinkPhase = f.blinkTimer / f.blinkDur;
+    const blink = Math.sin(blinkPhase * Math.PI);
+    const glow = (0.2 + 0.8 * (0.5 + 0.5 * Math.sin(f.phase))) * blink;
+    const pulse = 1 + energy.overall * 0.5;
+    const a = glow * pulse;
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 8);
+    g.addColorStop(0, `hsla(${f.hue}, 90%, 70%, ${a * 0.5})`);
+    g.addColorStop(0.4, `hsla(${f.hue}, 85%, 60%, ${a * 0.15})`);
+    g.addColorStop(1, `hsla(${f.hue}, 80%, 50%, 0)`);
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(f.x, f.y, f.r * 6, 0, Math.PI * 2);
+    ctx.arc(f.x, f.y, f.r * 8, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = `rgba(200, 240, 170, ${glow * 0.8})`;
+    ctx.fillStyle = `hsla(${f.hue}, 95%, 85%, ${a * 0.9})`;
     ctx.beginPath();
     ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
     ctx.fill();
@@ -540,160 +416,53 @@ function drawFireflies(dt) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-/* ---- 月亮 (缓慢漂移 + 旋律呼吸) ---- */
-let moonAngle = 0;
-function drawMoon(energy) {
-  const t = performance.now() / 1000;
-  // 缓慢沿弧线漂移: 从右上缓缓移向中上再回来
-  moonAngle += 0.0003;
-  const driftX = Math.cos(t * 0.03) * W * 0.06;
-  const driftY = Math.sin(t * 0.025) * H * 0.04;
-  const mx = W * 0.82 + driftX;
-  const my = H * 0.18 + driftY;
-  // 大小随低频呼吸
-  const mr = Math.min(W, H) * (0.05 + energy.bass * 0.015);
-  // 光晕亮度随旋律脉动
-  const haloAlpha = 0.12 + energy.mid * 0.12 + energy.bass * 0.08;
-  ctx.globalCompositeOperation = 'lighter';
-  const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * (4 + energy.overall * 1.5));
-  halo.addColorStop(0, `rgba(230, 235, 255, ${haloAlpha})`);
-  halo.addColorStop(0.5, `rgba(200, 215, 255, ${haloAlpha * 0.35})`);
-  halo.addColorStop(1, 'rgba(180, 200, 240, 0)');
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(mx, my, mr * (4 + energy.overall * 1.5), 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
-  // 月球本体 (自转: 光源角度缓慢旋转)
-  const lightAng = t * 0.08;
-  const lx = mx - mr * 0.3 * Math.cos(lightAng);
-  const ly = my - mr * 0.3 * Math.sin(lightAng);
-  const g = ctx.createRadialGradient(lx, ly, mr * 0.1, mx, my, mr);
-  g.addColorStop(0, '#f0f4ff');
-  g.addColorStop(0.6, '#d0d8ee');
-  g.addColorStop(1, '#a0aac8');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(mx, my, mr, 0, Math.PI * 2);
-  ctx.fill();
-  // 环形山 (随自转旋转)
-  ctx.save();
-  ctx.translate(mx, my);
-  ctx.rotate(t * 0.06);
-  ctx.fillStyle = 'rgba(150, 160, 190, 0.2)';
-  ctx.beginPath(); ctx.arc(mr * 0.2, -mr * 0.1, mr * 0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(-mr * 0.15, mr * 0.25, mr * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(mr * 0.35, mr * 0.15, mr * 0.08, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
-}
+/* ---- 萤火虫占位 (已移至上方) ---- */
 
-/* ---- 背景 ---- */
+/* ---- 月亮已移除 ---- */
+
+/* ---- 背景: 夏夜草地 ---- */
 function drawBackground() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#050818');
-  g.addColorStop(0.4, '#080a1e');
-  g.addColorStop(0.7, '#06081a');
-  g.addColorStop(1, '#03040e');
+  g.addColorStop(0, '#0a1814');
+  g.addColorStop(0.3, '#0c1e16');
+  g.addColorStop(0.6, '#0a1a12');
+  g.addColorStop(0.85, '#081410');
+  g.addColorStop(1, '#050a08');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // 远处微光
+  // 远处暖色微光 (夏夜氛围)
   ctx.globalCompositeOperation = 'lighter';
   const t = performance.now() / 1000;
-  const clouds = [
-    { h: 230, ox: -0.2, oy: -0.1 },
-    { h: 260, ox: 0.15, oy: 0.2 },
-    { h: 210, ox: 0.3, oy: -0.15 }
+  const glows = [
+    { h: 80, ox: -0.2, oy: -0.15, alpha: 0.03 },
+    { h: 50, ox: 0.2, oy: 0.1, alpha: 0.025 },
+    { h: 120, ox: 0.0, oy: -0.2, alpha: 0.02 }
   ];
-  for (let i = 0; i < clouds.length; i++) {
-    const c = clouds[i];
-    const bx = W * 0.5 + Math.cos(t * 0.05 + i * 2) * W * 0.1 + W * c.ox;
-    const by = H * 0.5 + Math.sin(t * 0.04 + i * 1.5) * H * 0.08 + H * c.oy;
-    const rad = Math.min(W, H) * 0.35;
+  for (let i = 0; i < glows.length; i++) {
+    const c = glows[i];
+    const bx = W * 0.5 + Math.cos(t * 0.03 + i * 2) * W * 0.12 + W * c.ox;
+    const by = H * 0.4 + Math.sin(t * 0.02 + i * 1.5) * H * 0.08 + H * c.oy;
+    const rad = Math.min(W, H) * 0.4;
     const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rad);
-    rg.addColorStop(0, `hsla(${c.h}, 70%, 50%, 0.04)`);
-    rg.addColorStop(0.6, `hsla(${c.h}, 60%, 40%, 0.015)`);
+    rg.addColorStop(0, `hsla(${c.h}, 60%, 50%, ${c.alpha})`);
+    rg.addColorStop(0.6, `hsla(${c.h}, 50%, 40%, ${c.alpha * 0.3})`);
     rg.addColorStop(1, 'hsla(0,0%,0%,0)');
     ctx.fillStyle = rg;
     ctx.beginPath();
     ctx.arc(bx, by, rad, 0, Math.PI * 2);
     ctx.fill();
   }
+  // 底部草地暗影渐变
+  const groundG = ctx.createLinearGradient(0, H * 0.7, 0, H);
+  groundG.addColorStop(0, 'rgba(5, 15, 10, 0)');
+  groundG.addColorStop(1, 'rgba(3, 8, 5, 0.6)');
+  ctx.fillStyle = groundG;
+  ctx.fillRect(0, H * 0.7, W, H * 0.3);
   ctx.globalCompositeOperation = 'source-over';
 }
 
-/* ---- 星星绘制 ---- */
-function hexA(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-}
-
-function drawStars(dt, energy) {
-  const t = performance.now() / 1000;
-  ctx.globalCompositeOperation = 'lighter';
-  const amp = 3 + energy.overall * 25 + energy.bass * 15;
-  const ampY = 2 + energy.mid * 18 + energy.treble * 10;
-  for (const s of stars) {
-    s.y -= dt * (0.3 + s.r * 0.2);
-    if (s.y < -4) { s.y = H + 4; s.x = Math.random() * W; s.trail = []; }
-    const dx = Math.sin(t * s.freq + s.phase) * amp * (0.5 + s.r * 0.5);
-    const dy = Math.cos(t * s.freq * 0.8 + s.phase) * ampY * (0.5 + s.r * 0.5);
-    const px = s.x + dx;
-    const py = s.y + dy;
-    const tw = 0.4 + 0.6 * Math.sin(t * s.tws + s.tw);
-    const pulse = 1 + energy.overall * 0.8 + energy.bass * 0.4;
-    const a = Math.min(1, (0.15 + tw * 0.55) * (0.5 + s.r * 0.3) * pulse);
-    const r = s.r * (1 + tw * 0.15) * (1 + energy.treble * 0.3);
-    
-    // 更新轨迹
-    s.trailTimer -= dt;
-    if (s.trailTimer <= 0) {
-      s.trail.push({ x: px, y: py, age: 0 });
-      if (s.trail.length > 8) s.trail.shift();
-      s.trailTimer = 0.03 + Math.random() * 0.02;
-    }
-    for (const tp of s.trail) {
-      tp.age += dt;
-    }
-    s.trail = s.trail.filter(tp => tp.age < 0.25);
-    
-    // 绘制轨迹
-    for (let i = 0; i < s.trail.length; i++) {
-      const tp = s.trail[i];
-      const trailAlpha = (1 - tp.age / 0.25) * a * 0.3;
-      const trailR = r * (1 - tp.age / 0.25) * 0.6;
-      ctx.fillStyle = hexA(s.color, trailAlpha);
-      ctx.beginPath();
-      ctx.arc(tp.x, tp.y, trailR, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    // 柔光晕
-    const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 3.5);
-    glow.addColorStop(0, hexA(s.color, a));
-    glow.addColorStop(1, hexA(s.color, 0));
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(px, py, r * 3.5, 0, Math.PI * 2);
-    ctx.fill();
-    // 星芯
-    ctx.fillStyle = hexA(s.color, Math.min(1, a + 0.15));
-    ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
-    ctx.fill();
-    // 亮星十字星芒
-    if (s.flare) {
-      const fl = (r + tw * 2) * 2.5 * (1 + energy.overall * 0.5);
-      ctx.strokeStyle = hexA(s.color, a * 0.6);
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(px - fl, py); ctx.lineTo(px + fl, py);
-      ctx.moveTo(px, py - fl); ctx.lineTo(px, py + fl);
-      ctx.stroke();
-    }
-  }
-  ctx.globalCompositeOperation = 'source-over';
-}
+/* ---- 星星绘制已移除 ---- */
 
 /* ---- 歌词 ---- */
 let lyrics = [], curLyric = -1;
@@ -736,7 +505,7 @@ const lyricCanvas = document.createElement('canvas');
 const lyricCtx = lyricCanvas.getContext('2d');
 const PARTICLES_PER_CHAR = 400;
 const MAX_PARTICLE_COUNT = 5000;
-const LYRIC_COLORS = ['#ff6b9d', '#c084fc', '#818cf8', '#38bdf8', '#34d399', '#fbbf24', '#fb923c', '#f472b6', '#a78bfa', '#22d3ee', '#facc15', '#4ade80'];
+const LYRIC_COLORS = ['#a8e6a0', '#d4f0c0', '#ffd56b', '#6bcf7f', '#b8e6a0', '#c0e890', '#e8d870', '#90d8a0', '#a0e8b0', '#d0e880', '#f0e0a0', '#80c890'];
 let lyricParticles = [];
 let activeParticleCount = 0;
 
@@ -971,153 +740,7 @@ function lyricStarResize() {
 }
 addEventListener('resize', lyricStarResize);
 
-/* ---- 飘落花瓣 ---- */
-const petals = [];
-function initPetals() {
-  petals.length = 0;
-  const n = 18;
-  for (let i = 0; i < n; i++) {
-    petals.push({
-      x: Math.random() * W, y: Math.random() * H - H,
-      vx: (Math.random() - 0.5) * 12,
-      vy: 8 + Math.random() * 12,
-      rot: Math.random() * Math.PI * 2,
-      rotSpeed: (Math.random() - 0.5) * 1.5,
-      size: 6 + Math.random() * 10,
-      hue: 330 + Math.random() * 30,
-      alpha: 0.3 + Math.random() * 0.3,
-      sway: Math.random() * Math.PI * 2,
-      swaySpeed: 0.5 + Math.random()
-    });
-  }
-}
-initPetals();
-addEventListener('resize', initPetals);
-
-function drawPetals(dt, energy) {
-  const t = performance.now() / 1000;
-  ctx.globalCompositeOperation = 'lighter';
-  for (const p of petals) {
-    p.sway += dt * p.swaySpeed;
-    p.x += p.vx * dt + Math.sin(p.sway) * 8 * dt;
-    p.y += p.vy * dt * (1 + energy.overall * 0.5);
-    p.rot += p.rotSpeed * dt;
-    if (p.y > H + 20) { p.y = -20; p.x = Math.random() * W; }
-    if (p.x < -20) p.x = W + 20;
-    if (p.x > W + 20) p.x = -20;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.rot);
-    const sz = p.size * (1 + energy.mid * 0.15);
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, sz);
-    g.addColorStop(0, `hsla(${p.hue}, 80%, 75%, ${p.alpha})`);
-    g.addColorStop(0.6, `hsla(${p.hue}, 70%, 60%, ${p.alpha * 0.4})`);
-    g.addColorStop(1, `hsla(${p.hue}, 60%, 50%, 0)`);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, sz, sz * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-/* ---- 极光丝带 ---- */
-let auroraOffset = 0;
-function drawAurora(energy) {
-  const t = performance.now() / 1000;
-  auroraOffset += 0.003 + energy.overall * 0.004;
-  ctx.globalCompositeOperation = 'lighter';
-  const ribbons = [
-    { hue: 280, yBase: 0.15, amp: 0.06, freq: 1.2, alpha: 0.06 },
-    { hue: 200, yBase: 0.22, amp: 0.05, freq: 0.9, alpha: 0.05 },
-    { hue: 320, yBase: 0.28, amp: 0.04, freq: 1.5, alpha: 0.04 }
-  ];
-  for (const rb of ribbons) {
-    const yBase = H * rb.yBase;
-    const ampPx = H * rb.amp * (1 + energy.overall * 0.6);
-    const alpha = rb.alpha * (1 + energy.mid * 0.8);
-    ctx.beginPath();
-    ctx.moveTo(0, yBase);
-    for (let x = 0; x <= W; x += 8) {
-      const y = yBase
-        + Math.sin(x * 0.005 * rb.freq + auroraOffset * 3) * ampPx
-        + Math.sin(x * 0.012 * rb.freq + auroraOffset * 5) * ampPx * 0.3;
-      ctx.lineTo(x, y);
-    }
-    ctx.lineTo(W, 0);
-    ctx.lineTo(0, 0);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(0, 0, 0, yBase + ampPx * 2);
-    g.addColorStop(0, `hsla(${rb.hue}, 80%, 60%, 0)`);
-    g.addColorStop(0.5, `hsla(${rb.hue}, 75%, 55%, ${alpha})`);
-    g.addColorStop(1, `hsla(${rb.hue}, 70%, 45%, 0)`);
-    ctx.fillStyle = g;
-    ctx.fill();
-  }
-  ctx.globalCompositeOperation = 'source-over';
-}
-
-/* ---- 爱心光点 ---- */
-const hearts = [];
-let heartTimer = 0;
-function updateHearts(dt, energy) {
-  heartTimer -= dt;
-  const interval = Math.max(0.5, 3 - energy.overall * 2);
-  if (heartTimer <= 0) {
-    hearts.push({
-      x: Math.random() * W,
-      y: H + 10,
-      vy: -(15 + Math.random() * 20 + energy.overall * 30),
-      vx: (Math.random() - 0.5) * 6,
-      size: 4 + Math.random() * 6,
-      hue: 340 + Math.random() * 20,
-      life: 0,
-      max: 4 + Math.random() * 3,
-      sway: Math.random() * Math.PI * 2
-    });
-    heartTimer = interval + Math.random();
-  }
-  for (const h of hearts) {
-    h.life += dt;
-    h.sway += dt * 2;
-    h.x += h.vx * dt + Math.sin(h.sway) * 5 * dt;
-    h.y += h.vy * dt;
-    h.vy += 3 * dt;
-  }
-  for (let i = hearts.length - 1; i >= 0; i--) {
-    if (hearts[i].life > hearts[i].max || hearts[i].y < -30) hearts.splice(i, 1);
-  }
-}
-
-function drawHearts() {
-  const t = performance.now() / 1000;
-  ctx.globalCompositeOperation = 'lighter';
-  for (const h of hearts) {
-    const p = h.life / h.max;
-    const a = Math.sin(Math.min(1, p) * Math.PI) * 0.5;
-    const sz = h.size * (1 + Math.sin(t * 3 + h.sway) * 0.1);
-    ctx.save();
-    ctx.translate(h.x, h.y);
-    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, sz * 3);
-    g.addColorStop(0, `hsla(${h.hue}, 90%, 80%, ${a})`);
-    g.addColorStop(0.5, `hsla(${h.hue}, 80%, 65%, ${a * 0.3})`);
-    g.addColorStop(1, `hsla(${h.hue}, 70%, 55%, 0)`);
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(0, 0, sz * 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = `hsla(${h.hue}, 95%, 85%, ${a * 0.8})`;
-    ctx.beginPath();
-    const s = sz * 0.5;
-    ctx.moveTo(0, s * 0.3);
-    ctx.bezierCurveTo(-s, -s * 0.5, -s * 1.2, s * 0.5, 0, s * 1.2);
-    ctx.bezierCurveTo(s * 1.2, s * 0.5, s, -s * 0.5, 0, s * 0.3);
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.globalCompositeOperation = 'source-over';
-}
+/* ---- 花瓣/极光/爱心已移除 ---- */
 
 /* ---- 主循环 ---- */
 let last = performance.now();
@@ -1126,16 +749,9 @@ function frame(now) {
   last = now;
   const energy = getEnergy();
   drawBackground();
-  drawAurora(energy);
-  drawMoon(energy);
-  drawStars(dt, energy);
   drawLyricStars(dt, energy);
-  drawFireflies(dt);
-  drawPetals(dt, energy);
-  updateHearts(dt, energy);
-  drawHearts();
-  updateMeteors(dt, energy);
-  drawMeteors();
+  drawFireflies(dt, energy);
+  drawGrass(dt, energy);
   updateLyrics(audioEl.currentTime);
   document.documentElement.style.setProperty('--bass', energy.bass.toFixed(3));
   document.documentElement.style.setProperty('--mid', energy.mid.toFixed(3));
