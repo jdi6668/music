@@ -233,32 +233,11 @@
 <body>
 <canvas id="cv"></canvas>
 
-<div id="playerWrap">
-<div id="player">
-  <div id="disc"></div>
-  <div class="song-title">搬家</div>
-  <div class="song-sub">夏 夜 草 地 · 静 谧</div>
-  <div id="track"><div id="fill"></div></div>
-  <div id="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
-  <div id="controls">
-    <button class="ctrl-btn" id="prevBtn">&#9664;&#9664;</button>
-    <button class="ctrl-btn" id="playBtn">&#9654;</button>
-    <button class="ctrl-btn" id="nextBtn">&#9654;&#9654;</button>
-  </div>
-  <div id="volWrap">
-    <span id="volIcon">&#128266;</span>
-    <input type="range" id="vol" min="0" max="1" step="0.01" value="1" />
-  </div>
-</div>
-</div>
-
 <div id="lyricNext"></div>
 <div id="lyric"></div>
-
-<div id="hint">点 击 空 白 处 唤 出 播 放 器</div>
 <div id="watermark">@震撼哥出品</div>
 
-<audio id="audio" preload="auto" src="heisemaoyi.mp3" crossorigin="anonymous"></audio>
+<audio id="audio" preload="auto" src="heisemaoyi.mp3" loop crossorigin="anonymous"></audio>
 
 <script>
 /* ============================================================
@@ -882,17 +861,6 @@ requestAnimationFrame(frame);
    播放器逻辑
    ============================================================ */
 const audio = document.getElementById('audio');
-const disc = document.getElementById('disc');
-const playBtn = document.getElementById('playBtn');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
-const fill = document.getElementById('fill');
-const track = document.getElementById('track');
-const curTime = document.getElementById('curTime');
-const durTime = document.getElementById('durTime');
-const vol = document.getElementById('vol');
-const player = document.getElementById('playerWrap');
-const hint = document.getElementById('hint');
 
 audio.volume = 1;
 
@@ -902,111 +870,13 @@ function fmt(s) {
   return m + ':' + String(ss).padStart(2, '0');
 }
 
-function togglePlay() {
-  if (audio.paused) {
-    if (!audioReady) setupAudio();
-    if (actx && actx.state === 'suspended') actx.resume();
-    audio.play().catch(e => console.warn(e));
-  } else {
-    audio.pause();
-  }
+// 页面打开即播放，循环播放
+function autoPlay() {
+  if (!audioReady) setupAudio();
+  if (actx && actx.state === 'suspended') actx.resume();
+  audio.play().catch(e => console.warn(e));
 }
-
-audio.addEventListener('play', () => {
-  playBtn.innerHTML = '&#10074;&#10074;';
-  disc.classList.add('playing');
-  playBtn.classList.add('playing');
-});
-audio.addEventListener('pause', () => {
-  playBtn.innerHTML = '&#9654;';
-  disc.classList.remove('playing');
-  playBtn.classList.remove('playing');
-});
-audio.addEventListener('loadedmetadata', () => {
-  durTime.textContent = fmt(audio.duration);
-});
-audio.addEventListener('timeupdate', () => {
-  if (audio.duration) {
-    fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
-    curTime.textContent = fmt(audio.currentTime);
-  }
-});
-audio.addEventListener('ended', () => {
-  audio.currentTime = 0;
-  audio.play();
-});
-
-function spawnRipple(btn, e) {
-  const rect = btn.getBoundingClientRect();
-  const r = document.createElement('span');
-  r.className = 'ripple';
-  const size = Math.max(rect.width, rect.height);
-  r.style.width = r.style.height = size + 'px';
-  r.style.left = (e.clientX - rect.left - size / 2) + 'px';
-  r.style.top = (e.clientY - rect.top - size / 2) + 'px';
-  btn.appendChild(r);
-  setTimeout(() => r.remove(), 600);
-}
-[playBtn, prevBtn, nextBtn].forEach(btn => {
-  btn.addEventListener('click', (e) => spawnRipple(btn, e));
-});
-
-playBtn.addEventListener('click', (e) => {
-  e.stopPropagation(); togglePlay();
-  if (!audio.paused) { player.classList.add('hidden'); hint.classList.add('fade'); clearTimeout(hideTimer); }
-});
-prevBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = 0; });
-nextBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = Math.max(0, audio.currentTime - 10); });
-
-track.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (!audio.duration) return;
-  const rect = track.getBoundingClientRect();
-  const pct = (e.clientX - rect.left) / rect.width;
-  audio.currentTime = pct * audio.duration;
-});
-
-vol.addEventListener('input', (e) => {
-  audio.volume = parseFloat(e.target.value);
-});
-vol.addEventListener('click', (e) => e.stopPropagation());
-
-// 点击空白处唤出/隐藏播放器
-let hideTimer;
-document.addEventListener('click', (e) => {
-  if (e.target.closest('#playerWrap')) return;
-  player.classList.remove('hidden');
-  hint.classList.add('fade');
-  clearTimeout(hideTimer);
-  hideTimer = setTimeout(() => {
-    if (!audio.paused) player.classList.add('hidden');
-  }, 6000);
-});
-
-// 鼠标移动也唤出
-document.addEventListener('mousemove', () => {
-  player.classList.remove('hidden');
-  hint.classList.add('fade');
-  clearTimeout(hideTimer);
-  hideTimer = setTimeout(() => {
-    if (!audio.paused) player.classList.add('hidden');
-  }, 6000);
-});
-
-// 卡片轻微 3D 视差效果
-const playerCard = document.getElementById('player');
-playerCard.addEventListener('mousemove', (e) => {
-  const rect = playerCard.getBoundingClientRect();
-  const px = (e.clientX - rect.left) / rect.width - 0.5;
-  const py = (e.clientY - rect.top) / rect.height - 0.5;
-  playerCard.style.transform = `rotateX(${(-py * 8).toFixed(2)}deg) rotateY(${(px * 8).toFixed(2)}deg)`;
-});
-playerCard.addEventListener('mouseleave', () => {
-  playerCard.style.transform = 'rotateX(0deg) rotateY(0deg)';
-});
-
-// 初始提示淡出
-setTimeout(() => hint.classList.add('fade'), 5000);
+autoPlay();
 </script>
 </body>
 </html>
