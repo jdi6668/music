@@ -740,7 +740,125 @@ function lyricStarResize() {
 }
 addEventListener('resize', lyricStarResize);
 
-/* ---- 花瓣/极光/爱心已移除 ---- */
+/* ---- 参天大树 (随风摇曳, 枝繁叶茂) ---- */
+let treeSwayPhase = 0;
+function drawBranch(x, y, ang, len, w, depth, swayPhase, windPower, energy) {
+  if (depth <= 0 || len < 3) return;
+  const sway = Math.sin(swayPhase + ang * 2) * (2 + depth * 1.5) * windPower;
+  const ex = x + Math.cos(ang) * len + sway;
+  const ey = y + Math.sin(ang) * len;
+  const lightness = 6 + depth * 1.5 + energy.bass * 4;
+  ctx.strokeStyle = `hsla(30, 35%, ${lightness}%, ${0.35 + depth * 0.04})`;
+  ctx.lineWidth = w;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.quadraticCurveTo((x + ex) / 2 + sway * 0.4, (y + ey) / 2, ex, ey);
+  ctx.stroke();
+  // 递归子枝
+  const nSub = depth > 3 ? 3 : 2;
+  for (let i = 0; i < nSub; i++) {
+    const spread = 0.5 + (3 - depth) * 0.15;
+    const childAng = ang + (i - (nSub - 1) / 2) * spread + (Math.random() - 0.5) * 0.1;
+    const childLen = len * (0.62 + Math.random() * 0.12);
+    const childW = w * 0.62;
+    drawBranch(ex, ey, childAng, childLen, childW, depth - 1, swayPhase + 0.3, windPower, energy);
+  }
+}
+
+function drawLeafCluster(cx, cy, r, hue, alpha, swayPhase, windPower, energy) {
+  const sx = cx + Math.sin(swayPhase) * 4 * windPower;
+  const sy = cy + Math.cos(swayPhase * 0.8) * 3 * windPower;
+  const rr = r * (1 + energy.overall * 0.06);
+  const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, rr);
+  g.addColorStop(0, `hsla(${hue}, 50%, ${18 + energy.bass * 8}%, ${alpha})`);
+  g.addColorStop(0.5, `hsla(${hue}, 45%, 12%, ${alpha * 0.5})`);
+  g.addColorStop(1, `hsla(${hue}, 40%, 8%, 0)`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(sx, sy, rr, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawTree(dt, energy) {
+  treeSwayPhase += dt * 0.4;
+  const baseY = H + 5;
+  const trunkX = W * 0.12;
+  const trunkH = Math.min(H * 0.75, 520);
+  const trunkW = Math.max(14, trunkH * 0.05);
+  const windPower = 1 + energy.mid * 0.6;
+
+  // 树干 (微弯, 从底部向上)
+  const trunkBend = Math.sin(treeSwayPhase * 0.2) * 5 * windPower;
+  ctx.strokeStyle = `hsla(28, 35%, ${6 + energy.bass * 4}%, 0.55)`;
+  ctx.lineWidth = trunkW;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(trunkX, baseY);
+  ctx.quadraticCurveTo(trunkX + trunkBend * 0.4, baseY - trunkH * 0.5, trunkX + trunkBend * 0.8, baseY - trunkH * 0.65);
+  ctx.stroke();
+
+  // 树干上半段渐细
+  const midX = trunkX + trunkBend * 0.8;
+  const midY = baseY - trunkH * 0.65;
+  const topBend = Math.sin(treeSwayPhase * 0.25) * 4 * windPower;
+  const topX = midX + topBend;
+  const topY = baseY - trunkH;
+  ctx.lineWidth = trunkW * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(midX, midY);
+  ctx.quadraticCurveTo((midX + topX) / 2 + topBend * 0.3, (midY + topY) / 2, topX, topY);
+  ctx.stroke();
+
+  // 递归树枝系统 (从树顶向上向外展开)
+  const mainBranches = [
+    { ang: -Math.PI / 2 - 0.5, len: trunkH * 0.3, w: trunkW * 0.5, depth: 5 },
+    { ang: -Math.PI / 2 + 0.5, len: trunkH * 0.32, w: trunkW * 0.55, depth: 5 },
+    { ang: -Math.PI / 2 - 0.15, len: trunkH * 0.35, w: trunkW * 0.6, depth: 5 },
+    { ang: -Math.PI / 2 + 0.2, len: trunkH * 0.28, w: trunkW * 0.45, depth: 4 },
+    { ang: -Math.PI / 2 - 0.8, len: trunkH * 0.25, w: trunkW * 0.4, depth: 4 },
+    { ang: -Math.PI / 2 + 0.8, len: trunkH * 0.26, w: trunkW * 0.42, depth: 4 }
+  ];
+  for (const b of mainBranches) {
+    drawBranch(topX, topY, b.ang, b.len, b.w, b.depth, treeSwayPhase, windPower, energy);
+  }
+
+  // 树冠 (大量叶团, 层层叠叠)
+  ctx.globalCompositeOperation = 'lighter';
+  const crownR = trunkH * 0.28;
+  const crownCx = topX + Math.sin(treeSwayPhase * 0.3) * 8 * windPower;
+  const crownCy = topY - crownR * 0.25;
+  const leafClusters = [
+    // 中心大叶团
+    { dx: 0, dy: 0, r: crownR, hue: 110, alpha: 0.14 },
+    { dx: -crownR * 0.4, dy: crownR * 0.05, r: crownR * 0.8, hue: 120, alpha: 0.12 },
+    { dx: crownR * 0.4, dy: crownR * 0.1, r: crownR * 0.75, hue: 100, alpha: 0.12 },
+    // 上层
+    { dx: -crownR * 0.15, dy: -crownR * 0.35, r: crownR * 0.7, hue: 115, alpha: 0.11 },
+    { dx: crownR * 0.25, dy: -crownR * 0.3, r: crownR * 0.65, hue: 105, alpha: 0.10 },
+    { dx: -crownR * 0.3, dy: -crownR * 0.5, r: crownR * 0.55, hue: 118, alpha: 0.09 },
+    { dx: crownR * 0.1, dy: -crownR * 0.55, r: crownR * 0.5, hue: 108, alpha: 0.08 },
+    // 下层
+    { dx: 0, dy: crownR * 0.35, r: crownR * 0.6, hue: 125, alpha: 0.09 },
+    { dx: -crownR * 0.5, dy: crownR * 0.3, r: crownR * 0.5, hue: 120, alpha: 0.08 },
+    { dx: crownR * 0.5, dy: crownR * 0.35, r: crownR * 0.5, hue: 110, alpha: 0.08 },
+    // 外围散叶
+    { dx: -crownR * 0.6, dy: -crownR * 0.15, r: crownR * 0.45, hue: 112, alpha: 0.07 },
+    { dx: crownR * 0.6, dy: -crownR * 0.1, r: crownR * 0.42, hue: 103, alpha: 0.07 },
+    { dx: -crownR * 0.35, dy: crownR * 0.5, r: crownR * 0.4, hue: 122, alpha: 0.06 },
+    { dx: crownR * 0.35, dy: crownR * 0.5, r: crownR * 0.38, hue: 113, alpha: 0.06 },
+    { dx: 0, dy: -crownR * 0.7, r: crownR * 0.35, hue: 116, alpha: 0.06 },
+    { dx: -crownR * 0.7, dy: crownR * 0.15, r: crownR * 0.32, hue: 106, alpha: 0.05 },
+    { dx: crownR * 0.7, dy: crownR * 0.2, r: crownR * 0.3, hue: 118, alpha: 0.05 }
+  ];
+  for (const c of leafClusters) {
+    const cx = crownCx + c.dx;
+    const cy = crownCy + c.dy;
+    const sp = treeSwayPhase * 0.5 + c.dx * 0.008 + c.dy * 0.006;
+    drawLeafCluster(cx, cy, c.r, c.hue, c.alpha, sp, windPower, energy);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
 
 /* ---- 主循环 ---- */
 let last = performance.now();
@@ -749,6 +867,7 @@ function frame(now) {
   last = now;
   const energy = getEnergy();
   drawBackground();
+  drawTree(dt, energy);
   drawLyricStars(dt, energy);
   drawFireflies(dt, energy);
   drawGrass(dt, energy);
