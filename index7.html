@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>亡命之徒 · 公路音乐播放器</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #0a0805;
+    font-family: "Georgia", "Times New Roman", "Microsoft YaHei", serif; }
+  canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  /* ---- Film grain overlay ---- */
+  #grain {
+    position: fixed; inset: -10px; z-index: 100; pointer-events: none;
+    opacity: 0.12; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/%3E%3C/svg%3E");
+    animation: grainShift 0.2s steps(1) infinite;
+  }
+  @keyframes grainShift {
+    0% { transform: translate(0,0); }
+    20% { transform: translate(-3px,2px); }
+    40% { transform: translate(2px,-2px); }
+    60% { transform: translate(-1px,3px); }
+    80% { transform: translate(3px,-1px); }
+    100% { transform: translate(-2px,1px); }
+  }
+
+  /* ---- Scanlines (CRT/film effect) ---- */
+  #scanlines {
+    position: fixed; inset: 0; z-index: 98; pointer-events: none;
+    background: repeating-linear-gradient(0deg,
+      transparent 0px, transparent 2px,
+      rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 3px);
+    opacity: 0.4;
+  }
+
+  /* ---- Letterbox bars (cinematic) ---- */
+  #letterboxTop, #letterboxBottom {
+    position: fixed; left: 0; right: 0; height: 0; z-index: 90;
+    background: #000; pointer-events: none;
+    transition: height 1.2s ease;
+  }
+  #letterboxTop { top: 0; }
+  #letterboxBottom { bottom: 0; }
+  #letterboxTop.show, #letterboxBottom.show { height: 40px; }
+
+  /* ---- Vignette ---- */
+  #vignette {
+    position: fixed; inset: 0; z-index: 50; pointer-events: none;
+    background:
+      radial-gradient(ellipse 120% 90% at center, transparent 25%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.9) 100%),
+      radial-gradient(ellipse 200% 40% at 50% 100%, rgba(0,0,0,0.3), transparent 60%);
+  }
+
+  /* ---- Film flicker + light leak ---- */
+  #flicker {
+    position: fixed; inset: 0; z-index: 99; pointer-events: none;
+    animation: flicker 0.1s steps(1) infinite;
+  }
+  #flicker::before {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(255,235,180,0.02);
+  }
+  #flicker::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 85% 20%, rgba(255,200,100,0.04), transparent 50%);
+    animation: lightLeak 8s ease-in-out infinite alternate;
+  }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    30% { opacity: 0.94; }
+    50% { opacity: 0.97; }
+    70% { opacity: 0.92; }
+  }
+  @keyframes lightLeak {
+    0% { opacity: 0.3; transform: translateX(-20px); }
+    100% { opacity: 0.8; transform: translateX(20px); }
+  }
+
+  :root { --bass: 0; --mid: 0; --treble: 0; }
+
+  /* ---- Player dashboard ---- */
+  #playerWrap {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 20; transition: opacity 0.6s ease, transform 0.6s ease;
+    perspective: 1000px;
+  }
+  #playerWrap.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.92); }
+
+  #player {
+    position: relative;
+    width: 390px; padding: 36px 34px 30px;
+    background: linear-gradient(170deg, rgba(22,18,12,0.85), rgba(12,10,8,0.92));
+    backdrop-filter: blur(24px) saturate(130%); -webkit-backdrop-filter: blur(24px) saturate(130%);
+    border: 1px solid rgba(180,140,80,0.18);
+    border-radius: 20px;
+    box-shadow:
+      0 16px 80px rgba(0,0,0,0.8),
+      0 0 0 1px rgba(255,220,150,0.04) inset,
+      0 0 100px rgba(200,140,60, calc(0.08 + var(--bass) * 0.25)),
+      0 0 60px rgba(255,160,40, calc(0.04 + var(--mid) * 0.15)),
+      inset 0 1px 0 rgba(255,220,160,0.08),
+      inset 0 -1px 0 rgba(0,0,0,0.3);
+    overflow: hidden;
+  }
+  #player::before {
+    content: ''; position: absolute; inset: -1px; border-radius: 20px; pointer-events: none; z-index: 0;
+    background: conic-gradient(from calc(var(--bass) * 120deg),
+      rgba(200,160,60,0.0), rgba(200,160,60,0.15),
+      rgba(255,200,80,0.0), rgba(200,160,60,0.1),
+      rgba(200,160,60,0.0));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    padding: 1px; opacity: 0.6;
+    animation: borderSpin 8s linear infinite;
+  }
+  @keyframes borderSpin { to { transform: rotate(360deg); } }
+  #player::after {
+    content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,210,100,0.4), transparent);
+    z-index: 1;
+  }
+  #player > * { position: relative; z-index: 2; }
+
+  /* ---- Dashboard top bar ---- */
+  .dash-top {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; padding-bottom: 14px;
+    border-bottom: 1px solid rgba(180,140,80,0.1);
+  }
+  .dash-label {
+    font-family: "Courier New", monospace;
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    color: rgba(200,170,120,0.5);
+  }
+  .dash-light {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,180,60, calc(0.3 + var(--mid) * 0.5));
+    box-shadow: 0 0 8px rgba(255,180,60, calc(0.4 + var(--mid) * 0.5));
+    animation: breathLight 3s ease-in-out infinite;
+  }
+  @keyframes breathLight {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+
+  /* ---- Vinyl record ---- */
+  #discWrap {
+    width: 180px; height: 180px; margin: 0 auto 24px;
+    position: relative;
+  }
+  #discWrap::before {
+    content: ''; position: absolute; inset: -12px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(200,160,60, calc(0.06 + var(--bass) * 0.15)), transparent 70%);
+    pointer-events: none; z-index: 0;
+    animation: discGlow 4s ease-in-out infinite;
+  }
+  @keyframes discGlow {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  #disc {
+    width: 100%; height: 100%; border-radius: 50%;
+    background:
+      repeating-radial-gradient(circle, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 2px, transparent 4px),
+      repeating-radial-gradient(circle, rgba(200,160,60,0.015) 0px, rgba(200,160,60,0.015) 1px, transparent 3px, transparent 7px),
+      radial-gradient(circle at 40% 40%, #2a2218 0%, #1a1410 40%, #0a0806 100%);
+    position: relative;
+    box-shadow:
+      0 0 0 2px rgba(180,140,80,0.1),
+      0 0 0 4px rgba(0,0,0,0.4),
+      0 8px 30px rgba(0,0,0,0.7),
+      0 0 calc(20px + var(--bass) * 50px) rgba(200,140,60, calc(0.2 + var(--bass) * 0.35)),
+      inset 0 0 30px rgba(0,0,0,0.7),
+      inset 0 0 60px rgba(0,0,0,0.3);
+    animation: spin 16s linear infinite;
+    animation-play-state: paused;
+    z-index: 1;
+  }
+  #disc.playing { animation-play-state: running; }
+  #disc::before {
+    content: ''; position: absolute; inset: 26px; border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 35%, #4a3a24 0%, #3a2a18 30%, #2a1e12 60%, #1a1208 100%);
+    box-shadow:
+      inset 0 0 18px rgba(0,0,0,0.6),
+      inset 0 0 3px rgba(200,160,80,0.25),
+      0 0 0 1px rgba(200,160,80,0.08);
+  }
+  #disc::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 40%, #e8c060, #c8a050, #8a6020);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 10px rgba(200,160,80,0.6), 0 0 20px rgba(200,160,80,0.3), inset 0 0 3px rgba(0,0,0,0.4);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- Song info ---- */
+  .song-title {
+    font-size: 22px; font-weight: 700; letter-spacing: 3px; text-align: center;
+    margin-bottom: 4px;
+    color: #d4b070;
+    text-shadow: 0 0 20px rgba(200,160,80,0.3), 0 2px 4px rgba(0,0,0,0.5);
+    font-family: "Georgia", serif;
+  }
+  .song-artist {
+    text-align: center; font-size: 12px; letter-spacing: 4px;
+    color: rgba(180,150,100,0.4); margin-bottom: 22px;
+    font-family: "Courier New", monospace; text-transform: uppercase;
+  }
+
+  /* ---- Road progress bar ---- */
+  #track {
+    width: 100%; height: 8px; cursor: pointer; margin-bottom: 8px;
+    position: relative; border-radius: 4px; overflow: visible;
+    background: rgba(30,25,18,0.6);
+    border: 1px solid rgba(180,140,80,0.08);
+  }
+  #trackRoad {
+    position: absolute; inset: 0; border-radius: 4px; overflow: hidden;
+    background:
+      repeating-linear-gradient(90deg,
+        transparent 0px, transparent 14px,
+        rgba(220,180,60,0.15) 14px, rgba(220,180,60,0.15) 28px);
+  }
+  #fill {
+    height: 100%; width: 0%; border-radius: 4px; position: relative;
+    background: linear-gradient(90deg, #c89030, #e8b840, #d4a020);
+    box-shadow: 0 0 12px rgba(220,180,60,0.5);
+    transition: width 0.15s linear;
+  }
+  #fill::after {
+    content: ''; position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle, #f0d060, #c89030);
+    box-shadow: 0 0 12px rgba(240,200,80,0.8), 0 0 24px rgba(220,180,60,0.4);
+    opacity: 0; transition: opacity 0.25s ease;
+  }
+  #track:hover #fill::after { opacity: 1; }
+  #times {
+    display: flex; justify-content: space-between;
+    color: rgba(180,150,100,0.35); font-size: 11px; letter-spacing: 1px;
+    margin-bottom: 22px; font-family: "Courier New", monospace;
+  }
+
+  /* ---- Controls (car stereo style) ---- */
+  #controls {
+    display: flex; align-items: center; justify-content: center; gap: 20px;
+    margin-bottom: 20px;
+  }
+  .ctrl-btn {
+    width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer;
+    background: linear-gradient(145deg, #2a2218, #1a1410);
+    color: rgba(200,170,120,0.6); font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s ease; position: relative; overflow: hidden;
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(200,160,80,0.1),
+      inset 0 -1px 0 rgba(0,0,0,0.3);
+    border: 1px solid rgba(180,140,80,0.1);
+  }
+  .ctrl-btn:hover {
+    background: linear-gradient(145deg, #3a2e1e, #2a2218);
+    color: #e8c878;
+    transform: scale(1.08);
+    box-shadow:
+      0 4px 16px rgba(0,0,0,0.5),
+      0 0 20px rgba(200,160,80,0.2),
+      inset 0 1px 0 rgba(200,160,80,0.15);
+  }
+  .ctrl-btn:active { transform: scale(0.95); }
+  #playBtn {
+    width: 62px; height: 62px; font-size: 22px;
+    background: linear-gradient(145deg, #c89030, #8a6020);
+    color: #1a1208; border: 1px solid rgba(220,180,60,0.3);
+    box-shadow:
+      0 4px 20px rgba(180,130,40,0.4),
+      0 0 0 1px rgba(255,220,120,0.1) inset,
+      inset 0 2px 0 rgba(255,230,150,0.2),
+      inset 0 -2px 0 rgba(0,0,0,0.2);
+  }
+  #playBtn:hover {
+    background: linear-gradient(145deg, #e8b840, #a87830);
+    box-shadow:
+      0 4px 30px rgba(200,160,60,0.5),
+      0 0 0 1px rgba(255,220,120,0.15) inset,
+      inset 0 2px 0 rgba(255,230,150,0.25);
+    transform: scale(1.06);
+  }
+  #playBtn.playing::before, #playBtn.playing::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid rgba(220,180,60,0.4);
+    animation: pulseRing 2s ease-out infinite;
+    pointer-events: none;
+  }
+  #playBtn.playing::after { animation-delay: 1s; }
+  @keyframes pulseRing {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(1.8); opacity: 0; }
+  }
+
+  /* ---- Spectrum bars (neon, with reflection) ---- */
+  #spectrum {
+    display: flex; align-items: flex-end; justify-content: center; gap: 2px;
+    height: 44px; margin-bottom: 18px; padding: 0 4px;
+    position: relative;
+  }
+  #spectrum::after {
+    content: ''; position: absolute; top: 100%; left: 4px; right: 4px; height: 20px;
+    background: linear-gradient(to bottom, rgba(255,160,40,0.06), transparent);
+    filter: blur(4px); pointer-events: none;
+  }
+  .spec-bar {
+    flex: 1; max-width: 5px; min-height: 2px; border-radius: 2px 2px 1px 1px;
+    background: linear-gradient(to top,
+      rgba(180,80,10,0.4),
+      rgba(255,140,20,0.85),
+      rgba(255,200,60,0.95),
+      rgba(255,230,120,1));
+    box-shadow:
+      0 0 8px rgba(255,160,40,0.5),
+      0 0 16px rgba(255,120,20,0.25),
+      0 -2px 4px rgba(255,200,80,0.3);
+    transition: height 0.04s linear;
+  }
+
+  /* ---- Volume knob ---- */
+  #volWrap {
+    display: flex; align-items: center; gap: 10px; justify-content: center;
+  }
+  #volIcon { color: rgba(200,170,120,0.4); font-size: 14px; }
+  #vol {
+    width: 100px; height: 4px; -webkit-appearance: none; appearance: none;
+    background: rgba(40,30,20,0.6); border-radius: 4px; outline: none;
+    border: 1px solid rgba(180,140,80,0.08);
+  }
+  #vol::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: radial-gradient(circle, #d4a040, #8a6020); cursor: pointer;
+    box-shadow: 0 0 8px rgba(200,160,60,0.5), inset 0 1px 0 rgba(255,220,120,0.2);
+  }
+  #vol::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; border: none;
+    background: radial-gradient(circle, #d4a040, #8a6020); cursor: pointer;
+    box-shadow: 0 0 8px rgba(200,160,60,0.5);
+  }
+
+  /* ---- Playlist ---- */
+  #playlistToggle {
+    position: absolute; top: 14px; right: 14px;
+    width: 28px; height: 28px; border-radius: 6px; border: none; cursor: pointer;
+    background: rgba(40,30,20,0.5); color: rgba(200,170,120,0.5);
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s ease; z-index: 5;
+    border: 1px solid rgba(180,140,80,0.1);
+  }
+  #playlistToggle:hover { background: rgba(60,45,25,0.6); color: #e8c878; }
+  #playlist {
+    position: absolute; top: 48px; right: 14px;
+    width: 220px; max-height: 0; overflow: hidden;
+    background: rgba(18,14,10,0.95); border-radius: 10px;
+    border: 1px solid rgba(180,140,80,0.12);
+    transition: max-height 0.3s ease; z-index: 5;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  }
+  #playlist.open { max-height: 300px; overflow-y: auto; }
+  .pl-item {
+    padding: 12px 16px; cursor: pointer; transition: all 0.2s ease;
+    border-bottom: 1px solid rgba(180,140,80,0.05);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pl-item:last-child { border-bottom: none; }
+  .pl-item:hover { background: rgba(50,38,22,0.4); }
+  .pl-item.active { background: rgba(80,58,30,0.3); }
+  .pl-item.active .pl-name { color: #e8c878; }
+  .pl-num {
+    font-family: "Courier New", monospace; font-size: 11px;
+    color: rgba(180,150,100,0.3); min-width: 18px;
+  }
+  .pl-name {
+    font-size: 13px; color: rgba(200,170,120,0.6);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* ---- Lyrics ---- */
+  #lyric {
+    position: fixed; left: 0; right: 0; bottom: 12%; text-align: center;
+    color: #e8d0a0; font-size: clamp(18px, 4vw, 34px); font-weight: 400; letter-spacing: 4px;
+    padding: 0 24px; z-index: 15; pointer-events: none;
+    opacity: 0; transform: translateY(14px); filter: blur(4px);
+    transition: opacity 0.8s ease, transform 0.8s ease, filter 0.8s ease;
+    text-shadow: 0 0 20px rgba(200,160,80,0.4), 0 0 50px rgba(180,130,40,0.2), 0 2px 8px rgba(0,0,0,0.6);
+    font-family: "Georgia", "Microsoft YaHei", serif;
+  }
+  #lyric.show { opacity: 1; transform: translateY(0); filter: blur(0); }
+  #lyricNext {
+    position: fixed; left: 0; right: 0; bottom: 6%; text-align: center;
+    color: rgba(200,170,120,0.3); font-size: clamp(12px, 2.5vw, 17px); letter-spacing: 3px;
+    padding: 0 24px; z-index: 15; pointer-events: none;
+    transition: opacity 0.6s ease;
+    font-family: "Georgia", "Microsoft YaHei", serif;
+  }
+
+  /* ---- Hint ---- */
+  #hint {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    color: rgba(200,170,120,0.2); font-size: 11px; letter-spacing: 5px;
+    z-index: 18; pointer-events: none; transition: opacity 0.5s ease;
+    font-family: "Courier New", monospace; text-transform: uppercase;
+  }
+  #hint.fade { opacity: 0; }
+
+  /* ---- Watermark ---- */
+  #watermark {
+    position: fixed; right: 16px; bottom: 12px; z-index: 18;
+    color: rgba(200,170,120,0.18); font-size: 10px; letter-spacing: 2px;
+    pointer-events: none; user-select: none;
+    font-family: "Courier New", monospace;
+  }
+
+  /* ---- Title card (cinematic) ---- */
+  #titleCard {
+    position: fixed; left: 50%; top: 18%; transform: translateX(-50%);
+    z-index: 18; pointer-events: none; text-align: center;
+    opacity: 0; transition: opacity 2s ease, transform 2s ease;
+    transform: translateX(-50%) translateY(20px);
+  }
+  #titleCard.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #titleCard .tc-main {
+    font-size: clamp(32px, 7vw, 60px); font-weight: 700; letter-spacing: 12px;
+    color: rgba(230,190,90,0.85);
+    text-shadow:
+      0 0 40px rgba(200,160,60,0.4),
+      0 0 80px rgba(180,130,40,0.2),
+      0 4px 16px rgba(0,0,0,0.6);
+    font-family: "Georgia", serif;
+    background: linear-gradient(180deg, rgba(255,220,120,0.9), rgba(200,160,60,0.6));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 30px rgba(200,160,60,0.3));
+  }
+  #titleCard .tc-sub {
+    font-size: 13px; letter-spacing: 8px; color: rgba(180,150,100,0.35);
+    margin-top: 10px; font-family: "Courier New", monospace; text-transform: uppercase;
+  }
+  #titleCard .tc-line {
+    width: 0; height: 1px; margin: 16px auto 0;
+    background: linear-gradient(90deg, transparent, rgba(200,160,60,0.4), transparent);
+    transition: width 2s ease 0.5s;
+  }
+  #titleCard.show .tc-line { width: 200px; }
+
+  /* Scrollbar */
+  #playlist::-webkit-scrollbar { width: 4px; }
+  #playlist::-webkit-scrollbar-track { background: transparent; }
+  #playlist::-webkit-scrollbar-thumb { background: rgba(180,140,80,0.15); border-radius: 4px; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="grain"></div>
+<div id="scanlines"></div>
+<div id="flicker"></div>
+<div id="vignette"></div>
+<div id="letterboxTop"></div>
+<div id="letterboxBottom"></div>
+
+<div id="titleCard">
+  <div class="tc-main">亡命之徒</div>
+  <div class="tc-sub">On The Road</div>
+  <div class="tc-line"></div>
+</div>
+
+<div id="playerWrap">
+<div id="player">
+  <button id="playlistToggle">&#9776;</button>
+  <div id="playlist"></div>
+
+  <div class="dash-top">
+    <span class="dash-label">CH-01 ROAD</span>
+    <span class="dash-light"></span>
+    <span class="dash-label" id="dashStatus">STANDBY</span>
+  </div>
+
+  <div id="discWrap"><div id="disc"></div></div>
+
+  <div class="song-title" id="songTitle">亡命之徒</div>
+  <div class="song-artist" id="songArtist">Super Band</div>
+
+  <div id="spectrum"></div>
+
+  <div id="track"><div id="trackRoad"></div><div id="fill"></div></div>
+  <div id="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
+
+  <div id="controls">
+    <button class="ctrl-btn" id="prevBtn">&#9664;&#9664;</button>
+    <button class="ctrl-btn" id="playBtn">&#9654;</button>
+    <button class="ctrl-btn" id="nextBtn">&#9654;&#9654;</button>
+  </div>
+
+  <div id="volWrap">
+    <span id="volIcon">&#9835;</span>
+    <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" />
+  </div>
+</div>
+</div>
+
+<div id="lyricNext"></div>
+<div id="lyric"></div>
+
+<div id="hint">CLICK TO START</div>
+<div id="watermark">@CINEMATIC ROAD PLAYER</div>
+
+<audio id="audio" preload="auto" crossorigin="anonymous"></audio>
+
+<script>
+/* ============================================================
+   CINEMATIC ROAD MUSIC PLAYER
+   公路电影风格 · 荒漠公路 · 星空 · 月光 · 频谱霓虹
+   ============================================================ */
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+let W, H, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+/* ---- Playlist ---- */
+const playlist = [
+  { title: '亡命之徒', artist: 'Super Band', src: 'heisemaoyi.mp3', lrc: 'heisemaoyi.lrc' },
+  { title: '黑色毛衣', artist: 'Jay Chou', src: 'music/黑色毛衣.mp3', lrc: 'music/黑色毛衣.lrc' },
+  { title: '搬家', artist: 'Ayal Komod', src: 'music/搬家.mp3', lrc: 'music/搬家.lrc' },
+  { title: '坏女孩', artist: '徐良/小凌', src: 'music/坏女孩.mp3', lrc: 'music/坏女孩.lrc' }
+];
+let curIdx = 0;
+
+/* ---- Build playlist UI ---- */
+const plEl = document.getElementById('playlist');
+playlist.forEach((s, i) => {
+  const div = document.createElement('div');
+  div.className = 'pl-item' + (i === 0 ? ' active' : '');
+  div.innerHTML = `<span class="pl-num">${String(i+1).padStart(2,'0')}</span><span class="pl-name">${s.title} — ${s.artist}</span>`;
+  div.onclick = () => { loadSong(i); plEl.classList.remove('open'); };
+  plEl.appendChild(div);
+});
+
+document.getElementById('playlistToggle').onclick = (e) => {
+  e.stopPropagation();
+  plEl.classList.toggle('open');
+};
+
+/* ---- Audio ---- */
+const audioEl = document.getElementById('audio');
+let actx, analyser, freqData, srcNode, audioReady = false;
+
+function setupAudio() {
+  if (audioReady) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = actx.createAnalyser();
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = 0.78;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  srcNode = actx.createMediaElementSource(audioEl);
+  srcNode.connect(analyser);
+  analyser.connect(actx.destination);
+  audioReady = true;
+}
+
+function getEnergy() {
+  if (!audioReady || audioEl.paused) return { bass: 0, mid: 0, treble: 0, overall: 0 };
+  analyser.getByteFrequencyData(freqData);
+  const bins = analyser.frequencyBinCount;
+  let bass = 0, mid = 0, treble = 0;
+  const bassEnd = Math.floor(bins * 0.1);
+  const midEnd = Math.floor(bins * 0.4);
+  for (let i = 0; i < bassEnd; i++) bass += freqData[i];
+  for (let i = bassEnd; i < midEnd; i++) mid += freqData[i];
+  for (let i = midEnd; i < bins; i++) treble += freqData[i];
+  bass = bass / (bassEnd * 255);
+  mid = mid / ((midEnd - bassEnd) * 255);
+  treble = treble / ((bins - midEnd) * 255);
+  return { bass, mid, treble, overall: (bass + mid + treble) / 3 };
+}
+
+/* ---- Spectrum bars ---- */
+const specEl = document.getElementById('spectrum');
+const SPEC_BARS = 28;
+const specBars = [];
+for (let i = 0; i < SPEC_BARS; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'spec-bar';
+  specEl.appendChild(bar);
+  specBars.push(bar);
+}
+
+function updateSpectrum() {
+  if (!audioReady || audioEl.paused) {
+    for (const b of specBars) b.style.height = '2px';
+    return;
+  }
+  analyser.getByteFrequencyData(freqData);
+  const bins = analyser.frequencyBinCount;
+  const step = Math.floor(bins / SPEC_BARS);
+  for (let i = 0; i < SPEC_BARS; i++) {
+    let sum = 0;
+    for (let j = 0; j < step; j++) sum += freqData[i * step + j] || 0;
+    const avg = sum / step / 255;
+    const h = Math.max(2, avg * 40);
+    specBars[i].style.height = h + 'px';
+  }
+}
+
+/* ---- Helpers ---- */
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+
+/* ---- Stars (with nebula & Milky Way) ---- */
+let stars = [];
+function initStars() {
+  stars = [];
+  const n = Math.round((W * H) / 3500);
+  for (let i = 0; i < n; i++) {
+    const bright = Math.random();
+    const inMilkyWay = Math.abs(Math.random() - 0.35) < 0.12;
+    stars.push({
+      x: Math.random() * W,
+      y: inMilkyWay ? H * (0.25 + Math.random() * 0.15) : Math.random() * H * 0.6,
+      r: bright > 0.93 ? 1.3 + Math.random() * 0.8 : Math.random() * 0.7 + 0.2,
+      tw: Math.random() * Math.PI * 2,
+      tws: 0.3 + Math.random() * 1.2,
+      color: ['#ffffff','#ffe9c8','#cfe6ff','#fff4d0','#ffd8a0','#e0d0ff'][(Math.random()*6)|0],
+      flare: bright > 0.95,
+      drift: (Math.random() - 0.5) * 0.15,
+      depth: 0.3 + Math.random() * 0.7
+    });
+  }
+}
+initStars();
+addEventListener('resize', initStars);
+
+function drawNebula(energy) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  // Milky Way band
+  ctx.save();
+  ctx.translate(W * 0.5, H * 0.32);
+  ctx.rotate(-0.15);
+  const mwG = ctx.createLinearGradient(0, -H * 0.08, 0, H * 0.08);
+  mwG.addColorStop(0, 'rgba(80,60,100,0)');
+  mwG.addColorStop(0.3, `rgba(100,80,130,${0.03 + energy.mid * 0.02})`);
+  mwG.addColorStop(0.5, `rgba(140,110,160,${0.05 + energy.mid * 0.03})`);
+  mwG.addColorStop(0.7, `rgba(100,80,130,${0.03 + energy.mid * 0.02})`);
+  mwG.addColorStop(1, 'rgba(80,60,100,0)');
+  ctx.fillStyle = mwG;
+  ctx.fillRect(-W, -H * 0.08, W * 2, H * 0.16);
+  ctx.restore();
+
+  // Nebula clouds
+  const nebs = [
+    { x: 0.15, y: 0.2, r: 0.2, hue: 280, sat: 60 },
+    { x: 0.7, y: 0.15, r: 0.25, hue: 30, sat: 50 },
+    { x: 0.45, y: 0.3, r: 0.18, hue: 220, sat: 40 }
+  ];
+  for (const n of nebs) {
+    const nx = n.x * W + Math.sin(t * 0.03 + n.hue) * W * 0.02;
+    const ny = n.y * H + Math.cos(t * 0.025 + n.hue) * H * 0.015;
+    const nr = n.r * Math.min(W, H);
+    const ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
+    ng.addColorStop(0, `hsla(${n.hue},${n.sat}%,50%,${0.04 + energy.overall * 0.03})`);
+    ng.addColorStop(0.5, `hsla(${n.hue},${n.sat}%,40%,${0.015 + energy.overall * 0.01})`);
+    ng.addColorStop(1, `hsla(${n.hue},${n.sat}%,30%,0)`);
+    ctx.fillStyle = ng;
+    ctx.beginPath(); ctx.arc(nx, ny, nr, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawStars(dt, energy) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const s of stars) {
+    s.x += s.drift * dt * (0.5 + energy.overall);
+    if (s.x > W + 5) s.x = -5;
+    if (s.x < -5) s.x = W + 5;
+    const tw = 0.4 + 0.6 * Math.sin(t * s.tws + s.tw);
+    const pulse = 1 + energy.overall * 0.6;
+    const a = Math.min(1, (0.15 + tw * 0.55) * (0.5 + s.r * 0.3) * pulse * s.depth);
+    const r = s.r * (1 + tw * 0.12) * (1 + energy.treble * 0.25);
+    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 3.5);
+    glow.addColorStop(0, hexA(s.color, a));
+    glow.addColorStop(1, hexA(s.color, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(s.x, s.y, r * 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = hexA(s.color, Math.min(1, a + 0.1));
+    ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.fill();
+    if (s.flare) {
+      const fl = (r + tw * 1.5) * 2.5 * (1 + energy.overall * 0.4);
+      ctx.strokeStyle = hexA(s.color, a * 0.35);
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(s.x - fl, s.y); ctx.lineTo(s.x + fl, s.y);
+      ctx.moveTo(s.x, s.y - fl); ctx.lineTo(s.x, s.y + fl);
+      ctx.stroke();
+      // Diagonal rays for brightest stars
+      if (s.r > 1.5) {
+        const dfl = fl * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(s.x - dfl, s.y - dfl); ctx.lineTo(s.x + dfl, s.y + dfl);
+        ctx.moveTo(s.x - dfl, s.y + dfl); ctx.lineTo(s.x + dfl, s.y - dfl);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Shooting stars ---- */
+let meteors = [];
+let meteorTimer = 0;
+function updateMeteors(dt, energy) {
+  meteorTimer -= dt;
+  if (meteorTimer <= 0 && (energy.overall > 0.15 || Math.random() < 0.3)) {
+    const fromLeft = Math.random() < 0.6;
+    const speed = 200 + Math.random() * 300 + energy.overall * 200;
+    const angle = 0.2 + Math.random() * 0.2;
+    meteors.push({
+      x: fromLeft ? -50 : W + 50,
+      y: Math.random() * H * 0.4,
+      vx: (fromLeft ? 1 : -1) * speed * Math.cos(angle),
+      vy: speed * Math.sin(angle),
+      life: 0,
+      max: 0.8 + Math.random() * 0.6,
+      len: 60 + Math.random() * 80,
+      hue: [40, 200, 280, 30][(Math.random()*4)|0],
+      width: 1 + Math.random() * 1.5
+    });
+    meteorTimer = 2 + Math.random() * 4;
+  }
+  for (const m of meteors) {
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    m.life += dt;
+  }
+  meteors = meteors.filter(m => m.life < m.max);
+}
+
+function drawMeteors() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const m of meteors) {
+    const p = m.life / m.max;
+    const a = Math.sin(p * Math.PI) * 0.8;
+    const ang = Math.atan2(m.vy, m.vx);
+    const tx = m.x - Math.cos(ang) * m.len;
+    const ty = m.y - Math.sin(ang) * m.len;
+    const g = ctx.createLinearGradient(m.x, m.y, tx, ty);
+    g.addColorStop(0, `hsla(${m.hue},90%,90%,${a})`);
+    g.addColorStop(0.3, `hsla(${m.hue},85%,75%,${a * 0.5})`);
+    g.addColorStop(1, `hsla(${m.hue},80%,60%,0)`);
+    ctx.strokeStyle = g;
+    ctx.lineWidth = m.width;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = `hsl(${m.hue},90%,80%)`;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    // Head glow
+    const hg = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.width * 6);
+    hg.addColorStop(0, `hsla(${m.hue},100%,95%,${a})`);
+    hg.addColorStop(1, `hsla(${m.hue},90%,70%,0)`);
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(m.x, m.y, m.width * 6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Moon with lens flare & anamorphic streak ---- */
+function drawMoon(energy) {
+  const t = performance.now() / 1000;
+  const mx = W * 0.78 + Math.cos(t * 0.02) * W * 0.04;
+  const my = H * 0.15 + Math.sin(t * 0.018) * H * 0.03;
+  const mr = Math.min(W, H) * 0.045;
+  const haloA = 0.1 + energy.mid * 0.1;
+  ctx.globalCompositeOperation = 'lighter';
+  // Big halo
+  const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 6);
+  halo.addColorStop(0, `rgba(240,230,200,${haloA})`);
+  halo.addColorStop(0.3, `rgba(230,210,170,${haloA*0.5})`);
+  halo.addColorStop(0.6, `rgba(210,190,150,${haloA*0.2})`);
+  halo.addColorStop(1, 'rgba(200,180,140,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(mx, my, mr * 6, 0, Math.PI * 2); ctx.fill();
+
+  // Anamorphic horizontal streak
+  const streakG = ctx.createLinearGradient(mx - mr * 8, my, mx + mr * 8, my);
+  streakG.addColorStop(0, 'rgba(220,200,160,0)');
+  streakG.addColorStop(0.5, `rgba(240,225,180,${0.15 + energy.mid * 0.1})`);
+  streakG.addColorStop(1, 'rgba(220,200,160,0)');
+  ctx.fillStyle = streakG;
+  ctx.fillRect(mx - mr * 8, my - 1.5, mr * 16, 3);
+
+  // Lens flare dots along axis
+  const flarePositions = [0.3, 0.5, 0.7, 1.2, 1.5];
+  const flareHues = [40, 200, 30, 280, 180];
+  for (let i = 0; i < flarePositions.length; i++) {
+    const fx = mx + (mx - W * 0.5) * flarePositions[i] * 0.5;
+    const fy = my + (my - H * 0.5) * flarePositions[i] * 0.5;
+    const fr = mr * (0.15 + 0.1 * Math.sin(t * 2 + i));
+    const fa = (0.08 + energy.overall * 0.05) * (1 - i * 0.12);
+    const fg = ctx.createRadialGradient(fx, fy, 0, fx, fy, fr * 4);
+    fg.addColorStop(0, `hsla(${flareHues[i]},80%,70%,${fa})`);
+    fg.addColorStop(1, `hsla(${flareHues[i]},80%,60%,0)`);
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.arc(fx, fy, fr * 4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Moon body
+  const g = ctx.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr);
+  g.addColorStop(0, '#f8f4e8');
+  g.addColorStop(0.5, '#e0d8c8');
+  g.addColorStop(0.85, '#c0b8a0');
+  g.addColorStop(1, '#908878');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+  // Craters
+  ctx.fillStyle = 'rgba(130,120,100,0.2)';
+  ctx.beginPath(); ctx.arc(mx + mr*0.22, my - mr*0.1, mr*0.14, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx - mr*0.15, my + mr*0.22, mr*0.1, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(mx + mr*0.05, my + mr*0.05, mr*0.07, 0, Math.PI*2); ctx.fill();
+  // Terminator shadow
+  const termG = ctx.createRadialGradient(mx + mr * 0.5, my + mr * 0.3, mr * 0.2, mx + mr * 0.5, my + mr * 0.3, mr * 1.5);
+  termG.addColorStop(0, 'rgba(20,15,10,0)');
+  termG.addColorStop(0.5, 'rgba(20,15,10,0.1)');
+  termG.addColorStop(1, 'rgba(20,15,10,0.3)');
+  ctx.fillStyle = termG;
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+}
+
+/* ---- Mountain silhouettes ---- */
+let mountainNoise = [];
+function initMountains() {
+  mountainNoise = [];
+  for (let i = 0; i < 200; i++) {
+    mountainNoise.push(Math.random());
+  }
+}
+initMountains();
+addEventListener('resize', initMountains);
+
+function drawMountains() {
+  const horizonY = H * 0.58;
+  // Far mountains
+  ctx.fillStyle = 'rgba(15,12,8,0.7)';
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+  for (let x = 0; x <= W; x += 8) {
+    const n = mountainNoise[((x * 0.3) | 0) % 200];
+    const h = 20 + n * 35 + Math.sin(x * 0.01) * 15;
+    ctx.lineTo(x, horizonY - h);
+  }
+  ctx.lineTo(W, horizonY);
+  ctx.closePath();
+  ctx.fill();
+  // Near mountains
+  ctx.fillStyle = 'rgba(8,6,4,0.85)';
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+  for (let x = 0; x <= W; x += 6) {
+    const n = mountainNoise[(((x * 0.5) | 0) + 50) % 200];
+    const h = 10 + n * 22 + Math.sin(x * 0.015 + 1) * 8;
+    ctx.lineTo(x, horizonY - h);
+  }
+  ctx.lineTo(W, horizonY);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/* ---- City lights with building silhouettes ---- */
+let cityLights = [], cityBuildings = [];
+function initCityLights() {
+  cityLights = [];
+  cityBuildings = [];
+  const horizonY = H * 0.58;
+  const cityStart = W * 0.55;
+  const cityEnd = W * 0.92;
+  for (let x = cityStart; x < cityEnd; x += 4 + Math.random() * 8) {
+    const bh = 5 + Math.random() * 25;
+    cityBuildings.push({ x, w: 3 + Math.random() * 6, h: bh });
+  }
+  for (let i = 0; i < 50; i++) {
+    const b = cityBuildings[(Math.random() * cityBuildings.length) | 0];
+    cityLights.push({
+      x: b.x + Math.random() * b.w,
+      y: horizonY - Math.random() * b.h,
+      r: 0.4 + Math.random() * 1.2,
+      hue: [30, 40, 50, 200, 210, 180][(Math.random()*6)|0],
+      tw: Math.random() * Math.PI * 2,
+      tws: 0.5 + Math.random() * 1.5
+    });
+  }
+}
+initCityLights();
+addEventListener('resize', initCityLights);
+
+function drawCity(energy) {
+  const horizonY = H * 0.58;
+  // Building silhouettes
+  ctx.fillStyle = 'rgba(6,4,3,0.9)';
+  for (const b of cityBuildings) {
+    ctx.fillRect(b.x, horizonY - b.h, b.w, b.h);
+  }
+  // City glow
+  ctx.globalCompositeOperation = 'lighter';
+  const glowG = ctx.createRadialGradient(W * 0.73, horizonY, 0, W * 0.73, horizonY, W * 0.2);
+  glowG.addColorStop(0, `rgba(255,160,40,${0.04 + energy.bass * 0.06})`);
+  glowG.addColorStop(0.5, `rgba(255,120,20,${0.015 + energy.bass * 0.02})`);
+  glowG.addColorStop(1, 'rgba(255,100,10,0)');
+  ctx.fillStyle = glowG;
+  ctx.fillRect(W * 0.4, horizonY - 50, W * 0.6, 60);
+
+  // Lights
+  const t = performance.now() / 1000;
+  for (const c of cityLights) {
+    const tw = 0.5 + 0.5 * Math.sin(t * c.tws + c.tw);
+    const a = tw * (0.4 + energy.mid * 0.3);
+    ctx.fillStyle = `hsla(${c.hue},85%,65%,${a})`;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `hsla(${c.hue},90%,80%,${a * 0.25})`;
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r * 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Desert highway (enhanced) ---- */
+let roadOffset = 0;
+function drawHighway(dt, energy) {
+  roadOffset += dt * (40 + energy.overall * 100 + energy.bass * 60);
+  const horizonY = H * 0.58;
+  const roadW = W * 0.5;
+  const vanishX = W * 0.5;
+
+  // Sky gradient (richer)
+  const skyG = ctx.createLinearGradient(0, 0, 0, horizonY);
+  skyG.addColorStop(0, '#080610');
+  skyG.addColorStop(0.3, '#0e0a14');
+  skyG.addColorStop(0.6, '#14100e');
+  skyG.addColorStop(0.85, '#1c1610');
+  skyG.addColorStop(1, '#28200e');
+  ctx.fillStyle = skyG;
+  ctx.fillRect(0, 0, W, horizonY);
+
+  // Horizon glow (warm, pulsing with bass)
+  ctx.globalCompositeOperation = 'lighter';
+  const glowG = ctx.createRadialGradient(vanishX, horizonY, 0, vanishX, horizonY, W * 0.35);
+  glowG.addColorStop(0, `rgba(220,150,50,${0.08 + energy.bass * 0.12})`);
+  glowG.addColorStop(0.3, `rgba(200,130,30,${0.04 + energy.bass * 0.06})`);
+  glowG.addColorStop(0.7, `rgba(180,110,20,${0.015 + energy.bass * 0.02})`);
+  glowG.addColorStop(1, 'rgba(150,100,20,0)');
+  ctx.fillStyle = glowG;
+  ctx.fillRect(0, 0, W, horizonY + 30);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Ground/desert
+  const groundG = ctx.createLinearGradient(0, horizonY, 0, H);
+  groundG.addColorStop(0, '#1c1610');
+  groundG.addColorStop(0.2, '#16110c');
+  groundG.addColorStop(0.6, '#0e0a06');
+  groundG.addColorStop(1, '#060403');
+  ctx.fillStyle = groundG;
+  ctx.fillRect(0, horizonY, W, H - horizonY);
+
+  // Road surface with subtle texture
+  const roadG = ctx.createLinearGradient(0, horizonY, 0, H);
+  roadG.addColorStop(0, '#0a0806');
+  roadG.addColorStop(0.5, '#12100c');
+  roadG.addColorStop(1, '#0e0c08');
+  ctx.fillStyle = roadG;
+  ctx.beginPath();
+  ctx.moveTo(vanishX - 8, horizonY);
+  ctx.lineTo(vanishX + 8, horizonY);
+  ctx.lineTo(vanishX + roadW * 0.7, H);
+  ctx.lineTo(vanishX - roadW * 0.7, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Road edges with warm glow
+  ctx.strokeStyle = 'rgba(140,100,50,0.2)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(vanishX - 8, horizonY);
+  ctx.lineTo(vanishX - roadW * 0.7, H);
+  ctx.moveTo(vanishX + 8, horizonY);
+  ctx.lineTo(vanishX + roadW * 0.7, H);
+  ctx.stroke();
+
+  // Center dashed yellow lines (perspective, with glow)
+  const dashLen = 45;
+  const gapLen = 35;
+  const totalLen = dashLen + gapLen;
+  const offset = roadOffset % totalLen;
+  for (let d = -totalLen; d < H + totalLen; d += totalLen) {
+    const y1 = horizonY + d + offset;
+    const y2 = y1 + dashLen;
+    if (y2 < horizonY || y1 > H) continue;
+    const t1 = (y1 - horizonY) / (H - horizonY);
+    const t2 = (y2 - horizonY) / (H - horizonY);
+    const w1 = Math.max(0.5, t1 * 5);
+    const w2 = Math.max(0.5, t2 * 5);
+    const alpha = 0.2 + t1 * 0.35;
+    // Glow
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(255,200,40,${alpha * 0.15})`;
+    ctx.beginPath();
+    ctx.moveTo(vanishX - w1 * 3, y1); ctx.lineTo(vanishX + w1 * 3, y1);
+    ctx.lineTo(vanishX + w2 * 3, y2); ctx.lineTo(vanishX - w2 * 3, y2);
+    ctx.closePath(); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+    // Line
+    ctx.fillStyle = `rgba(230,190,50,${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(vanishX - w1, y1); ctx.lineTo(vanishX + w1, y1);
+    ctx.lineTo(vanishX + w2, y2); ctx.lineTo(vanishX - w2, y2);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // Road reflection (sky on road surface)
+  ctx.globalCompositeOperation = 'lighter';
+  const reflG = ctx.createLinearGradient(0, horizonY, 0, H * 0.75);
+  reflG.addColorStop(0, `rgba(200,150,60,${0.03 + energy.bass * 0.04})`);
+  reflG.addColorStop(1, 'rgba(200,150,60,0)');
+  ctx.fillStyle = reflG;
+  ctx.beginPath();
+  ctx.moveTo(vanishX - 8, horizonY);
+  ctx.lineTo(vanishX + 8, horizonY);
+  ctx.lineTo(vanishX + roadW * 0.4, H * 0.75);
+  ctx.lineTo(vanishX - roadW * 0.4, H * 0.75);
+  ctx.closePath(); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Telephone poles
+  drawPoles(dt);
+
+  // Ground fog
+  drawGroundFog(dt, energy);
+
+  // Dust particles
+  drawDust(dt, energy);
+
+  // Speed lines on bass
+  drawSpeedLines(energy);
+}
+
+/* ---- Telephone poles (enhanced) ---- */
+let poles = [];
+function initPoles() {
+  poles = [];
+  for (let i = 0; i < 8; i++) {
+    poles.push({ dist: i * 0.15 + 0.05, side: -1 });
+    poles.push({ dist: i * 0.15 + 0.05, side: 1 });
+  }
+}
+initPoles();
+addEventListener('resize', initPoles);
+
+function drawPoles(dt) {
+  const horizonY = H * 0.58;
+  for (const p of poles) {
+    p.dist += dt * 0.05;
+    if (p.dist > 1.2) p.dist -= 1.2;
+    const t = p.dist;
+    const y = horizonY + t * (H - horizonY);
+    const xOff = p.side * (W * 0.15 + t * W * 0.35);
+    const x = W * 0.5 + xOff;
+    const scale = t * t;
+    const poleH = scale * 90;
+    const poleW = Math.max(0.5, scale * 3.5);
+    if (poleH < 2) continue;
+    const alpha = 0.35 + t * 0.35;
+    ctx.fillStyle = `rgba(25,18,12,${alpha})`;
+    ctx.fillRect(x - poleW/2, y - poleH, poleW, poleH);
+    // Crossbar
+    ctx.fillRect(x - poleW * 2.5, y - poleH, poleW * 5, poleW * 0.7);
+    // Wires (catenary curve)
+    ctx.strokeStyle = `rgba(25,18,12,${0.15 + t * 0.15})`;
+    ctx.lineWidth = Math.max(0.3, scale * 0.9);
+    const wireSag = poleH * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(x - poleW * 2, y - poleH + poleW);
+    ctx.quadraticCurveTo(x - poleW * 2, y - poleH * 0.5 + wireSag, x - poleW * 2, y);
+    ctx.moveTo(x + poleW * 2, y - poleH + poleW);
+    ctx.quadraticCurveTo(x + poleW * 2, y - poleH * 0.5 + wireSag, x + poleW * 2, y);
+    ctx.stroke();
+    // Second wire pair
+    ctx.beginPath();
+    ctx.moveTo(x - poleW * 1.5, y - poleH + poleW * 0.5);
+    ctx.quadraticCurveTo(x - poleW * 1.5, y - poleH * 0.5 + wireSag * 0.8, x - poleW * 1.5, y);
+    ctx.moveTo(x + poleW * 1.5, y - poleH + poleW * 0.5);
+    ctx.quadraticCurveTo(x + poleW * 1.5, y - poleH * 0.5 + wireSag * 0.8, x + poleW * 1.5, y);
+    ctx.stroke();
+  }
+}
+
+/* ---- Ground fog ---- */
+let fogOffset = 0;
+function drawGroundFog(dt, energy) {
+  fogOffset += dt * 5;
+  const horizonY = H * 0.58;
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) {
+    const fy = horizonY + 10 + i * 25;
+    const falpha = 0.015 + energy.mid * 0.02;
+    const fg = ctx.createLinearGradient(0, fy - 15, 0, fy + 15);
+    fg.addColorStop(0, 'rgba(180,160,120,0)');
+    fg.addColorStop(0.5, `rgba(180,160,120,${falpha})`);
+    fg.addColorStop(1, 'rgba(180,160,120,0)');
+    ctx.fillStyle = fg;
+    ctx.fillRect(0, fy - 15, W, 30);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Dust particles (enhanced with glow) ---- */
+let dust = [];
+function initDust() {
+  dust = [];
+  for (let i = 0; i < 50; i++) {
+    dust.push({
+      x: Math.random() * W, y: H * 0.55 + Math.random() * H * 0.45,
+      vx: 10 + Math.random() * 30,
+      vy: (Math.random() - 0.5) * 4,
+      r: 0.3 + Math.random() * 1.5,
+      a: 0.04 + Math.random() * 0.12,
+      phase: Math.random() * Math.PI * 2
+    });
+  }
+}
+initDust();
+addEventListener('resize', initDust);
+
+function drawDust(dt, energy) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const d of dust) {
+    d.x += d.vx * dt * (1 + energy.overall * 0.6);
+    d.y += d.vy * dt + Math.sin(t * 0.5 + d.phase) * 0.3;
+    if (d.x > W + 10) { d.x = -10; d.y = H * 0.55 + Math.random() * H * 0.45; }
+    const a = d.a * (1 + energy.mid * 0.6);
+    const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r * 3);
+    g.addColorStop(0, `rgba(220,190,120,${a})`);
+    g.addColorStop(1, 'rgba(200,170,100,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r * 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(230,200,130,${a * 1.5})`;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Embers (floating up from road) ---- */
+let embers = [];
+function updateEmbers(dt, energy) {
+  if (Math.random() < 0.3 + energy.overall * 0.5) {
+    embers.push({
+      x: W * 0.3 + Math.random() * W * 0.4,
+      y: H * 0.75 + Math.random() * H * 0.2,
+      vx: (Math.random() - 0.5) * 8,
+      vy: -15 - Math.random() * 25,
+      r: 0.5 + Math.random() * 1.2,
+      life: 0,
+      max: 2 + Math.random() * 2,
+      hue: 20 + Math.random() * 30
+    });
+  }
+  for (const e of embers) {
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    e.vy += 5 * dt;
+    e.life += dt;
+  }
+  embers = embers.filter(e => e.life < e.max && e.y > H * 0.3);
+}
+
+function drawEmbers() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const e of embers) {
+    const p = e.life / e.max;
+    const a = (1 - p) * 0.6;
+    const g = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.r * 4);
+    g.addColorStop(0, `hsla(${e.hue},90%,70%,${a})`);
+    g.addColorStop(1, `hsla(${e.hue},85%,55%,0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `hsla(${e.hue + 10},100%,85%,${a})`;
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Speed lines (bass reactive) ---- */
+let speedLines = [];
+function drawSpeedLines(energy) {
+  if (energy.bass > 0.5 && Math.random() < energy.bass * 0.3) {
+    speedLines.push({
+      x: Math.random() * W,
+      y: H * 0.6 + Math.random() * H * 0.35,
+      len: 30 + Math.random() * 60,
+      life: 0,
+      max: 0.3,
+      a: 0.15 + energy.bass * 0.2
+    });
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  for (const s of speedLines) {
+    s.life += 0.016;
+    s.x += 15;
+    const p = s.life / s.max;
+    const a = s.a * (1 - p);
+    ctx.strokeStyle = `rgba(255,200,80,${a})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(s.x + s.len, s.y);
+    ctx.stroke();
+  }
+  speedLines = speedLines.filter(s => s.life < s.max);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Gas station neon sign (enhanced) ---- */
+function drawNeSign(energy) {
+  const t = performance.now() / 1000;
+  const x = W * 0.1;
+  const y = H * 0.5;
+  const flicker = 0.6 + 0.4 * Math.sin(t * 7) * Math.sin(t * 11);
+  const a = flicker * (0.18 + energy.bass * 0.15);
+  ctx.globalCompositeOperation = 'lighter';
+  // Outer glow
+  const g = ctx.createRadialGradient(x, y, 0, x, y, 80);
+  g.addColorStop(0, `rgba(255,140,30,${a})`);
+  g.addColorStop(0.3, `rgba(255,120,20,${a * 0.4})`);
+  g.addColorStop(0.7, `rgba(255,100,10,${a * 0.1})`);
+  g.addColorStop(1, 'rgba(255,100,10,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, 80, 0, Math.PI * 2); ctx.fill();
+  // Neon text with glow
+  ctx.font = 'bold 16px "Courier New", monospace';
+  ctx.fillStyle = `rgba(255,170,50,${a * 1.8})`;
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(255,140,30,0.8)';
+  ctx.shadowBlur = 12;
+  ctx.fillText('GAS', x, y - 4);
+  ctx.font = 'bold 11px "Courier New", monospace';
+  ctx.fillText('24H', x, y + 12);
+  ctx.shadowBlur = 0;
+  // Pole structure
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = 'rgba(15,10,6,0.6)';
+  ctx.fillRect(x - 1, y + 15, 2, H * 0.08);
+}
+
+/* ---- Clouds (multi-layer, slow drifting) ---- */
+function drawClouds() {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  const clouds = [
+    { x: 0.15, y: 0.12, w: 0.3, h: 0.04, speed: 0.002, alpha: 0.05 },
+    { x: 0.5, y: 0.2, w: 0.35, h: 0.05, speed: 0.0015, alpha: 0.04 },
+    { x: 0.8, y: 0.08, w: 0.25, h: 0.035, speed: 0.003, alpha: 0.06 },
+    { x: 0.3, y: 0.28, w: 0.4, h: 0.06, speed: 0.001, alpha: 0.03 }
+  ];
+  for (const c of clouds) {
+    const cx = ((c.x + t * c.speed) % 1.3 - 0.15) * W;
+    const cy = c.y * H;
+    const cw = c.w * W;
+    const ch = c.h * H;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, cw);
+    g.addColorStop(0, `rgba(70,55,40,${c.alpha})`);
+    g.addColorStop(0.5, `rgba(55,42,30,${c.alpha * 0.5})`);
+    g.addColorStop(1, 'rgba(40,30,20,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(cx, cy, cw, ch, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- Background ---- */
+function drawBackground() {
+  const bgG = ctx.createLinearGradient(0, 0, 0, H);
+  bgG.addColorStop(0, '#060410');
+  bgG.addColorStop(0.4, '#08060e');
+  bgG.addColorStop(0.6, '#0a0808');
+  bgG.addColorStop(1, '#040302');
+  ctx.fillStyle = bgG;
+  ctx.fillRect(0, 0, W, H);
+}
+
+/* ---- Lyrics ---- */
+let lyrics = [], curLyric = -1;
+const lyricEl = document.getElementById('lyric');
+const lyricNextEl = document.getElementById('lyricNext');
+
+async function loadLyrics(lrcFile) {
+  try {
+    const text = await (await fetch(lrcFile)).text();
+    const skip = ['词：', '曲：', '编曲', '制作', '人：', '和声', '混音', '母带', '监制', '男：', '女：'];
+    const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)/;
+    lyrics = text.split(/\r?\n/).map(l => {
+      const m = l.match(re); if (!m) return null;
+      const t = m[4].trim(); if (!t || skip.some(s => t.includes(s))) return null;
+      const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+      return { time: +m[1] * 60 + +m[2] + frac, text: t };
+    }).filter(Boolean).sort((a, b) => a.time - b.time);
+  } catch (e) { lyrics = []; }
+}
+
+function updateLyrics(t) {
+  if (!lyrics.length) return;
+  let idx = -1;
+  for (let i = 0; i < lyrics.length; i++) {
+    if (t >= lyrics[i].time) idx = i; else break;
+  }
+  if (idx !== curLyric) {
+    curLyric = idx;
+    lyricEl.classList.remove('show');
+    setTimeout(() => {
+      lyricEl.textContent = idx >= 0 ? lyrics[idx].text : '';
+      if (lyricEl.textContent) lyricEl.classList.add('show');
+    }, 200);
+    lyricNextEl.textContent = (idx + 1 < lyrics.length) ? lyrics[idx + 1].text : '';
+  }
+}
+
+/* ---- Player controls ---- */
+const playBtn = document.getElementById('playBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const volSlider = document.getElementById('vol');
+const disc = document.getElementById('disc');
+const songTitleEl = document.getElementById('songTitle');
+const songArtistEl = document.getElementById('songArtist');
+const fillEl = document.getElementById('fill');
+const curTimeEl = document.getElementById('curTime');
+const durTimeEl = document.getElementById('durTime');
+const dashStatus = document.getElementById('dashStatus');
+const titleCard = document.getElementById('titleCard');
+
+function fmtTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+async function loadSong(idx) {
+  curIdx = idx;
+  const s = playlist[idx];
+  audioEl.src = s.src;
+  songTitleEl.textContent = s.title;
+  songArtistEl.textContent = s.artist;
+  curLyric = -1;
+  lyricEl.textContent = '';
+  lyricNextEl.textContent = '';
+  await loadLyrics(s.lrc);
+  document.querySelectorAll('.pl-item').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  if (audioReady && actx.state === 'suspended') actx.resume();
+  dashStatus.textContent = 'LOADING';
+  await new Promise(resolve => {
+    const onReady = () => { audioEl.removeEventListener('canplaythrough', onReady); resolve(); };
+    audioEl.addEventListener('canplaythrough', onReady, { once: true });
+    setTimeout(resolve, 8000);
+  });
+  audioEl.play().catch(() => {});
+}
+
+function togglePlay() {
+  setupAudio();
+  if (actx.state === 'suspended') actx.resume();
+  if (audioEl.paused) {
+    audioEl.play();
+  } else {
+    audioEl.pause();
+  }
+}
+
+playBtn.onclick = (e) => { e.stopPropagation(); togglePlay(); };
+prevBtn.onclick = (e) => { e.stopPropagation(); loadSong((curIdx - 1 + playlist.length) % playlist.length); };
+nextBtn.onclick = (e) => { e.stopPropagation(); loadSong((curIdx + 1) % playlist.length); };
+
+volSlider.oninput = () => { audioEl.volume = parseFloat(volSlider.value); };
+audioEl.volume = 0.8;
+
+audioEl.addEventListener('play', () => {
+  playBtn.innerHTML = '&#10074;&#10074;';
+  playBtn.classList.add('playing');
+  disc.classList.add('playing');
+  dashStatus.textContent = 'PLAYING';
+  document.getElementById('hint').classList.add('fade');
+});
+audioEl.addEventListener('pause', () => {
+  playBtn.innerHTML = '&#9654;';
+  playBtn.classList.remove('playing');
+  disc.classList.remove('playing');
+  dashStatus.textContent = 'PAUSED';
+});
+audioEl.addEventListener('ended', () => {
+  loadSong((curIdx + 1) % playlist.length);
+});
+audioEl.addEventListener('timeupdate', () => {
+  const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
+  fillEl.style.width = pct + '%';
+  curTimeEl.textContent = fmtTime(audioEl.currentTime);
+  durTimeEl.textContent = fmtTime(audioEl.duration);
+  updateLyrics(audioEl.currentTime);
+});
+
+/* ---- Progress bar click ---- */
+document.getElementById('track').onclick = (e) => {
+  if (!audioEl.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audioEl.currentTime = pct * audioEl.duration;
+};
+
+/* ---- Click to show/hide player ---- */
+let playerVisible = true;
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#player') || e.target.closest('#playlist')) return;
+  playerVisible = !playerVisible;
+  document.getElementById('playerWrap').classList.toggle('hidden', !playerVisible);
+});
+
+/* ---- Init ---- */
+loadSong(0);
+setTimeout(() => titleCard.classList.add('show'), 500);
+setTimeout(() => titleCard.classList.remove('show'), 5000);
+setTimeout(() => {
+  document.getElementById('letterboxTop').classList.add('show');
+  document.getElementById('letterboxBottom').classList.add('show');
+}, 800);
+
+/* ---- Main loop ---- */
+let lastT = performance.now();
+function loop() {
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+
+  const energy = getEnergy();
+  document.documentElement.style.setProperty('--bass', energy.bass.toFixed(3));
+  document.documentElement.style.setProperty('--mid', energy.mid.toFixed(3));
+  document.documentElement.style.setProperty('--treble', energy.treble.toFixed(3));
+
+  drawBackground();
+  drawNebula(energy);
+  drawClouds();
+  drawStars(dt, energy);
+  updateMeteors(dt, energy);
+  drawMeteors();
+  drawMoon(energy);
+  drawMountains();
+  drawHighway(dt, energy);
+  drawCity(energy);
+  drawNeSign(energy);
+  updateEmbers(dt, energy);
+  drawEmbers();
+  updateSpectrum();
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
