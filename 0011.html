@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>星空夜语 · 助眠音乐</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #02030a;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  /* ---- 播放器卡片 ---- */
+  :root { --bass: 0; --mid: 0; }
+  #playerWrap {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 10; transition: opacity 0.8s ease, transform 0.8s ease;
+    animation: floatCard 6s ease-in-out infinite;
+    will-change: transform;
+    perspective: 900px;
+  }
+  #playerWrap.hidden { opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0.94); }
+  @keyframes floatCard { 0%, 100% { margin-top: 0; } 50% { margin-top: -10px; } }
+  #player {
+    position: relative;
+    width: 340px; padding: 38px 32px 32px; text-align: center;
+    background: linear-gradient(165deg, rgba(18, 22, 42, 0.6), rgba(10, 12, 26, 0.55));
+    backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid rgba(160, 185, 240, 0.16);
+    border-radius: 28px;
+    box-shadow:
+      0 10px 70px rgba(10, 14, 34, 0.55),
+      0 0 0 1px rgba(255,255,255,0.03) inset,
+      0 0 90px rgba(123, 108, 196, calc(0.10 + var(--bass) * 0.35)),
+      0 0 50px rgba(107, 214, 255, calc(0.06 + var(--mid) * 0.25));
+    transition: box-shadow 0.15s ease, transform 0.35s ease;
+    transform-style: preserve-3d;
+    overflow: hidden;
+  }
+  #player::before {
+    content: ''; position: absolute; inset: -1px; border-radius: 28px; padding: 1px;
+    background: conic-gradient(from calc(var(--bass) * 360deg), #6bd6ff, #7b6cc4, #ff8fd0, #6bd6ff);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    opacity: 0.35; pointer-events: none; z-index: 0;
+  }
+  #player::after {
+    content: ''; position: absolute; inset: 0; border-radius: 28px; pointer-events: none; z-index: 0;
+    background: radial-gradient(circle at 50% -10%, rgba(255,255,255,0.09), transparent 55%);
+  }
+  #player > * { position: relative; z-index: 1; }
+
+  /* 唱片 */
+  #disc {
+    width: 168px; height: 168px; border-radius: 50%; margin: 0 auto 26px;
+    background:
+      repeating-radial-gradient(circle, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 2px, transparent 5px),
+      conic-gradient(from 0deg, #1a1a2e, #16213e, #0f3460, #1a1a2e);
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.05),
+      0 8px 32px rgba(0,0,0,0.5),
+      0 0 calc(20px + var(--bass) * 50px) rgba(123, 108, 196, calc(0.25 + var(--bass) * 0.45)),
+      inset 0 0 24px rgba(0,0,0,0.65);
+    animation: spin 20s linear infinite;
+    animation-play-state: paused;
+    transition: box-shadow 0.15s ease;
+  }
+  #disc.playing { animation-play-state: running; }
+  #disc::before {
+    content: ''; position: absolute; inset: 32px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #3a3a5e 0%, #1a1a3e 60%, #0a0a1e 100%);
+    box-shadow: inset 0 0 12px rgba(0,0,0,0.6), inset 0 0 2px rgba(255,255,255,0.15);
+  }
+  #disc::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #6bd6ff; transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px rgba(107, 214, 255, 0.6), 0 0 24px rgba(107, 214, 255, calc(0.3 + var(--bass) * 0.5));
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .song-title {
+    font-size: 19px; font-weight: 700; letter-spacing: 2px;
+    margin-bottom: 5px;
+    background: linear-gradient(90deg, #bcd4ff, #e8d8ff, #ffd8ec, #bcd4ff);
+    background-size: 300% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: titleShine 8s linear infinite;
+    filter: drop-shadow(0 0 16px rgba(120, 140, 220, 0.35));
+  }
+  @keyframes titleShine { to { background-position: -300% center; } }
+  .song-sub {
+    color: rgba(180, 200, 240, 0.4); font-size: 12px; letter-spacing: 3px;
+    margin-bottom: 24px;
+  }
+
+  /* 进度条 */
+  #track {
+    width: 100%; height: 6px; background: rgba(100, 120, 180, 0.15);
+    border-radius: 6px; overflow: visible; cursor: pointer; margin-bottom: 10px;
+    position: relative;
+  }
+  #track::before {
+    content: ''; position: absolute; inset: 0; border-radius: 6px; overflow: hidden;
+    background: rgba(100, 120, 180, 0.12);
+  }
+  #fill {
+    height: 100%; width: 0%; border-radius: 6px;
+    background: linear-gradient(90deg, #4a8fd6, #7b6cc4, #ff8fd0);
+    background-size: 200% auto;
+    box-shadow: 0 0 14px rgba(130, 150, 220, 0.55);
+    transition: width 0.15s linear;
+    position: relative;
+    animation: fillShift 4s linear infinite;
+  }
+  @keyframes fillShift { to { background-position: -200% center; } }
+  #fill::after {
+    content: ''; position: absolute; right: -3px; top: 50%; transform: translateY(-50%);
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.9), 0 0 18px rgba(150,170,255,0.7);
+    opacity: 0; transition: opacity 0.25s ease;
+  }
+  #track:hover #fill::after { opacity: 1; }
+  #times {
+    display: flex; justify-content: space-between;
+    color: rgba(180, 200, 240, 0.35); font-size: 11px; letter-spacing: 1px;
+    margin-bottom: 24px;
+  }
+
+  /* 控制按钮 */
+  #controls {
+    display: flex; align-items: center; justify-content: center; gap: 22px;
+  }
+  .ctrl-btn {
+    width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(60, 80, 140, 0.15); color: rgba(200, 220, 255, 0.65);
+    font-size: 16px; display: flex; align-items: center; justify-content: center;
+    transition: all 0.25s ease; position: relative; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset;
+  }
+  .ctrl-btn:hover {
+    background: rgba(80, 110, 180, 0.28); color: #e0e8ff;
+    transform: scale(1.1);
+    box-shadow: 0 0 18px rgba(120, 140, 220, 0.35), 0 0 0 1px rgba(255,255,255,0.08) inset;
+  }
+  .ctrl-btn:active { transform: scale(0.94); }
+  .ripple {
+    position: absolute; border-radius: 50%; background: rgba(255,255,255,0.5);
+    transform: scale(0); animation: rippleAnim 0.6s ease-out forwards; pointer-events: none;
+  }
+  @keyframes rippleAnim { to { transform: scale(2.6); opacity: 0; } }
+  #playBtn {
+    width: 64px; height: 64px; font-size: 23px;
+    background: linear-gradient(135deg, #4a8fd6, #7b6cc4);
+    color: #fff; position: relative;
+    box-shadow: 0 4px 28px rgba(80, 110, 180, 0.4), 0 0 0 1px rgba(255,255,255,0.08) inset;
+  }
+  #playBtn:hover {
+    background: linear-gradient(135deg, #5a9fe6, #8b7cd4);
+    box-shadow: 0 4px 36px rgba(100, 130, 200, 0.55), 0 0 0 1px rgba(255,255,255,0.1) inset;
+    transform: scale(1.08);
+  }
+  #playBtn.playing::before, #playBtn.playing::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    border: 1.5px solid rgba(130, 160, 255, 0.55);
+    animation: pulseRing 2.2s ease-out infinite;
+    pointer-events: none;
+  }
+  #playBtn.playing::after { animation-delay: 1.1s; }
+  @keyframes pulseRing {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.9); opacity: 0; }
+  }
+
+  /* 音量 */
+  #volWrap {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 20px; justify-content: center;
+  }
+  #volIcon { color: rgba(180, 200, 240, 0.4); font-size: 14px; }
+  #vol {
+    width: 84px; height: 3px; -webkit-appearance: none; appearance: none;
+    background: rgba(100, 120, 180, 0.18); border-radius: 3px; outline: none;
+    transition: background 0.2s ease;
+  }
+  #vol:hover { background: rgba(100, 120, 180, 0.3); }
+  #vol::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: #6bd6ff; cursor: pointer; box-shadow: 0 0 8px rgba(107,214,255,0.6);
+    transition: box-shadow 0.2s ease;
+  }
+  #vol::-webkit-slider-thumb:hover { box-shadow: 0 0 14px rgba(107,214,255,0.9); }
+  #vol::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%; border: none;
+    background: #6bd6ff; cursor: pointer; box-shadow: 0 0 8px rgba(107,214,255,0.6);
+  }
+
+  /* 歌词 */
+  #lyric {
+    position: fixed; left: 0; right: 0; bottom: 14%; text-align: center;
+    color: #e8ecff; font-size: clamp(20px, 4.5vw, 38px); font-weight: 400; letter-spacing: 3px;
+    padding: 0 24px; z-index: 6; pointer-events: none;
+    opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(5px);
+    transition: opacity 0.9s ease, transform 0.9s ease, filter 0.9s ease;
+    text-shadow: 0 0 22px rgba(140,170,240,0.5), 0 0 50px rgba(120,100,200,0.3);
+  }
+  #lyric.show { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  #lyricNext {
+    position: fixed; left: 0; right: 0; bottom: 7%; text-align: center;
+    color: rgba(200,215,255,0.35); font-size: clamp(13px, 2.8vw, 19px); letter-spacing: 2px;
+    padding: 0 24px; z-index: 6; pointer-events: none;
+    transition: opacity 0.7s ease;
+  }
+
+  /* 唤出提示 */
+  #hint {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    color: rgba(180, 200, 240, 0.25); font-size: 12px; letter-spacing: 4px;
+    z-index: 9; pointer-events: none; transition: opacity 0.5s ease;
+  }
+  #hint.fade { opacity: 0; }
+
+  /* 水印 */
+  #watermark {
+    position: fixed; right: 16px; bottom: 12px; z-index: 9;
+    color: rgba(180, 200, 240, 0.22); font-size: 10px; letter-spacing: 1px;
+    pointer-events: none; user-select: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="playerWrap">
+<div id="player">
+  <div id="disc"></div>
+  <div class="song-title">抽离</div>
+  <div class="song-sub">夜 深 了 · 好 梦</div>
+  <div id="track"><div id="fill"></div></div>
+  <div id="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
+  <div id="controls">
+    <button class="ctrl-btn" id="prevBtn">&#9664;&#9664;</button>
+    <button class="ctrl-btn" id="playBtn">&#9654;</button>
+    <button class="ctrl-btn" id="nextBtn">&#9654;&#9654;</button>
+  </div>
+  <div id="volWrap">
+    <span id="volIcon">&#128266;</span>
+    <input type="range" id="vol" min="0" max="1" step="0.01" value="1" />
+  </div>
+</div>
+</div>
+
+<div id="lyricNext"></div>
+<div id="lyric"></div>
+
+<div id="hint">点 击 空 白 处 唤 出 播 放 器</div>
+<div id="watermark">@震撼哥出品</div>
+
+<audio id="audio" preload="auto" src="heisemaoyi.mp3" crossorigin="anonymous"></audio>
+
+<script>
+/* ============================================================
+   星空夜语 —— 助眠音乐播放器
+   流星雨背景 (随旋律律动) · 闪烁星空 · 月光 · 萤火虫 · 歌词
+   ============================================================ */
+const canvas = document.getElementById('cv');
+const ctx = canvas.getContext('2d');
+let W, H, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = innerWidth; H = innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize); resize();
+
+/* ---- 荧光棒人海 ---- */
+const GLOWSTICK_COLORS = ['#00eaff', '#ff2fd6', '#7cff4f', '#ffe83d', '#ff5b3d', '#7b6cff', '#3dffe0', '#ff3d9a'];
+let glowsticks = [];
+function initGlowsticks() {
+  glowsticks = [];
+  const n = Math.round((W * H) / 5500);
+  for (let i = 0; i < n; i++) {
+    const depth = Math.random();
+    glowsticks.push({
+      x: Math.random() * W,
+      baseY: H * (0.55 + depth * 0.5) + Math.random() * 20,
+      depth,
+      len: 26 + depth * 46 + Math.random() * 10,
+      angle: (Math.random() - 0.5) * 0.6,
+      swayPhase: Math.random() * Math.PI * 2,
+      swaySpeed: 0.6 + Math.random() * 1.0,
+      color: GLOWSTICK_COLORS[(Math.random() * GLOWSTICK_COLORS.length) | 0],
+      flickerPhase: Math.random() * Math.PI * 2,
+      flickerSpeed: 1 + Math.random() * 2
+    });
+  }
+  glowsticks.sort((a, b) => a.depth - b.depth);
+}
+initGlowsticks();
+addEventListener('resize', initGlowsticks);
+
+/* ---- 音频分析 ---- */
+const audioEl = document.getElementById('audio');
+let actx, analyser, freqData, timeData, srcNode;
+let audioReady = false;
+
+function setupAudio() {
+  if (audioReady) return;
+  actx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = actx.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.8;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  timeData = new Uint8Array(analyser.fftSize);
+  srcNode = actx.createMediaElementSource(audioEl);
+  srcNode.connect(analyser);
+  analyser.connect(actx.destination);
+  audioReady = true;
+}
+
+function getEnergy() {
+  if (!audioReady || audioEl.paused) return { bass: 0, mid: 0, treble: 0, overall: 0 };
+  analyser.getByteFrequencyData(freqData);
+  const bins = analyser.frequencyBinCount;
+  let bass = 0, mid = 0, treble = 0;
+  const bassEnd = Math.floor(bins * 0.08);
+  const midEnd = Math.floor(bins * 0.3);
+  for (let i = 0; i < bassEnd; i++) bass += freqData[i];
+  for (let i = bassEnd; i < midEnd; i++) mid += freqData[i];
+  for (let i = midEnd; i < bins; i++) treble += freqData[i];
+  bass = bass / (bassEnd * 255);
+  mid = mid / ((midEnd - bassEnd) * 255);
+  treble = treble / ((bins - midEnd) * 255);
+  return { bass, mid, treble, overall: (bass + mid + treble) / 3 };
+}
+
+/* ---- 流星 (随旋律律动, 浪漫飘逸风) ---- */
+const meteors = [];
+const meteorSparks = [];
+let meteorTimer = 0;
+let smoothBass = 0, smoothMid = 0, smoothTreble = 0;
+const METEOR_HUES = [330, 300, 270, 40, 200, 180];
+
+function spawnMeteor(energy) {
+  const fromLeft = Math.random() < 0.6;
+  const startY = Math.random() * H * 0.45;
+  // 速度随整体能量变化: 整体放慢, 仍保留节奏感
+  const baseSpeed = 70 + energy.overall * 230 + energy.bass * 90;
+  const speed = baseSpeed + Math.random() * 30;
+  const angle = 0.28 + Math.random() * 0.18;
+  // 大小随低频和中频变化
+  const width = 1 + energy.bass * 3 + energy.mid * 1.3 + Math.random() * 0.8;
+  const len = 90 + energy.overall * 180 + energy.treble * 100 + Math.random() * 70;
+  // 色相从浪漫色系中随机选取, 再叠加能量偏移
+  const baseHue = METEOR_HUES[(Math.random() * METEOR_HUES.length) | 0];
+  const hue = baseHue + energy.mid * 20 + Math.random() * 14 - 7;
+  const vx = (fromLeft ? 1 : -1) * speed * Math.cos(angle);
+  const vy = speed * Math.sin(angle);
+  const dist = W + 220;
+  const travelSpeed = Math.hypot(vx, vy) || 1;
+  meteors.push({
+    x: fromLeft ? -100 : W + 100,
+    y: startY,
+    vx, vy,
+    life: 0,
+    max: (dist / travelSpeed) * (0.55 + Math.random() * 0.25),
+    len: len,
+    hue: hue,
+    width: width,
+    brightness: 0.55 + energy.overall * 0.45,
+    sparkTimer: 0
+  });
+}
+
+function spawnSpark(m) {
+  const ang = Math.atan2(m.vy, m.vx);
+  const backX = m.x - Math.cos(ang) * m.len * (0.3 + Math.random() * 0.5);
+  const backY = m.y - Math.sin(ang) * m.len * (0.3 + Math.random() * 0.5);
+  meteorSparks.push({
+    x: backX + (Math.random() - 0.5) * 6,
+    y: backY + (Math.random() - 0.5) * 6,
+    vx: (Math.random() - 0.5) * 10,
+    vy: (Math.random() - 0.5) * 10 + 4,
+    life: 0,
+    max: 0.5 + Math.random() * 0.6,
+    r: 0.6 + Math.random() * 1.4,
+    hue: m.hue + (Math.random() - 0.5) * 20
+  });
+}
+
+function updateMeteors(dt, energy) {
+  // 平滑能量值
+  smoothBass += (energy.bass - smoothBass) * 0.15;
+  smoothMid += (energy.mid - smoothMid) * 0.15;
+  smoothTreble += (energy.treble - smoothTreble) * 0.15;
+
+  meteorTimer -= dt;
+  // 生成频率随能量变化: 安静时稀疏, 高潮时密集, 整体节奏放慢
+  const spawnInterval = Math.max(0.35, 3.6 - energy.overall * 2.6 - energy.bass * 1.0);
+  if (meteorTimer <= 0) {
+    spawnMeteor(energy);
+    // 高能量时可能一次生成多颗
+    if (energy.overall > 0.55 && Math.random() < energy.overall * 0.4) spawnMeteor(energy);
+    meteorTimer = spawnInterval + Math.random() * 0.8;
+  }
+  for (const m of meteors) {
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    m.life += dt;
+    m.sparkTimer -= dt;
+    if (m.sparkTimer <= 0) {
+      spawnSpark(m);
+      m.sparkTimer = 0.02 + Math.random() * 0.02;
+    }
+  }
+  for (let i = meteors.length - 1; i >= 0; i--) {
+    if (meteors[i].life > meteors[i].max) meteors.splice(i, 1);
+  }
+  for (const s of meteorSparks) {
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.vy += 6 * dt;
+    s.life += dt;
+  }
+  for (let i = meteorSparks.length - 1; i >= 0; i--) {
+    if (meteorSparks[i].life > meteorSparks[i].max) meteorSparks.splice(i, 1);
+  }
+}
+
+function drawMeteors() {
+  ctx.globalCompositeOperation = 'lighter';
+  for (const m of meteors) {
+    const p = m.life / m.max;
+    const a = Math.sin(Math.min(1, p) * Math.PI) * (0.6 + m.brightness * 0.4);
+    const ang = Math.atan2(m.vy, m.vx);
+    const tx = m.x - Math.cos(ang) * m.len;
+    const ty = m.y - Math.sin(ang) * m.len;
+    const g = ctx.createLinearGradient(m.x, m.y, tx, ty);
+    g.addColorStop(0, `hsla(${m.hue}, 90%, 88%, ${a})`);
+    g.addColorStop(0.3, `hsla(${m.hue}, 85%, 75%, ${a * 0.5})`);
+    g.addColorStop(1, `hsla(${m.hue}, 80%, 60%, 0)`);
+    ctx.strokeStyle = g;
+    ctx.lineWidth = m.width;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = `hsl(${m.hue}, 90%, 78%)`;
+    ctx.shadowBlur = 8 + m.width * 4;
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    // 头部柔光晕
+    const headGlow = ctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, m.width * 5);
+    headGlow.addColorStop(0, `hsla(${m.hue}, 100%, 95%, ${a})`);
+    headGlow.addColorStop(0.4, `hsla(${m.hue}, 95%, 85%, ${a * 0.4})`);
+    headGlow.addColorStop(1, `hsla(${m.hue}, 90%, 70%, 0)`);
+    ctx.fillStyle = headGlow;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.width * 5, 0, Math.PI * 2);
+    ctx.fill();
+    // 头部亮点
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.width * 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${m.hue}, 100%, 93%, ${a})`;
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  // 闪烁尘埃余晖
+  for (const s of meteorSparks) {
+    const p = s.life / s.max;
+    const a = (1 - p) * 0.7;
+    const glow = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 4);
+    glow.addColorStop(0, `hsla(${s.hue}, 95%, 90%, ${a})`);
+    glow.addColorStop(1, `hsla(${s.hue}, 90%, 75%, 0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r * 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `hsla(${s.hue}, 100%, 95%, ${a})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 萤火虫 ---- */
+const fireflies = [];
+function initFireflies() {
+  fireflies.length = 0;
+  const n = 25;
+  for (let i = 0; i < n; i++) {
+    fireflies.push({
+      x: Math.random() * W, y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 15,
+      vy: (Math.random() - 0.5) * 10,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.5 + Math.random() * 1.0,
+      r: 1 + Math.random() * 1.5
+    });
+  }
+}
+initFireflies();
+addEventListener('resize', initFireflies);
+
+function drawFireflies(dt) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const f of fireflies) {
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.phase += dt * f.speed;
+    // 缓慢游荡
+    f.vx += (Math.random() - 0.5) * 8 * dt;
+    f.vy += (Math.random() - 0.5) * 5 * dt;
+    f.vx = Math.max(-20, Math.min(20, f.vx));
+    f.vy = Math.max(-15, Math.min(15, f.vy));
+    // 边界回绕
+    if (f.x < -10) f.x = W + 10;
+    if (f.x > W + 10) f.x = -10;
+    if (f.y < -10) f.y = H + 10;
+    if (f.y > H + 10) f.y = -10;
+    const glow = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(f.phase));
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 6);
+    g.addColorStop(0, `rgba(200, 220, 255, ${glow * 0.6})`);
+    g.addColorStop(0.5, `rgba(170, 200, 255, ${glow * 0.15})`);
+    g.addColorStop(1, 'rgba(120, 150, 220, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r * 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(230, 240, 255, ${glow * 0.8})`;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 舞台桁架 (顶部横梁 + 立柱 + 灯珠) ---- */
+function drawStageRig(energy) {
+  const t = performance.now() / 1000;
+  const trussY = H * 0.05;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(100, 110, 140, 0.35)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(W * 0.04, trussY);
+  ctx.lineTo(W * 0.96, trussY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(W * 0.04, trussY + 14);
+  ctx.lineTo(W * 0.96, trussY + 14);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(100, 110, 140, 0.22)';
+  ctx.lineWidth = 1.5;
+  for (let x = W * 0.04; x < W * 0.96; x += 26) {
+    ctx.beginPath();
+    ctx.moveTo(x, trussY);
+    ctx.lineTo(x + 26, trussY + 14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, trussY + 14);
+    ctx.lineTo(x + 26, trussY);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(100, 110, 140, 0.28)';
+  ctx.lineWidth = 3;
+  [W * 0.05, W * 0.95].forEach(x => {
+    ctx.beginPath();
+    ctx.moveTo(x, trussY);
+    ctx.lineTo(x, H * 0.98);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // 桁架灯珠 (随节奏闪烁跳动)
+  ctx.globalCompositeOperation = 'lighter';
+  const lampCount = 14;
+  for (let i = 0; i < lampCount; i++) {
+    const lx = W * 0.06 + W * 0.88 * (i / (lampCount - 1));
+    const hue = (i * 40 + t * 30) % 360;
+    const flick = 0.4 + 0.6 * Math.abs(Math.sin(t * 3 + i));
+    const alpha = 0.5 + energy.bass * 0.5 * flick;
+    const glow = ctx.createRadialGradient(lx, trussY + 7, 0, lx, trussY + 7, 10);
+    glow.addColorStop(0, `hsla(${hue}, 90%, 80%, ${alpha})`);
+    glow.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(lx, trussY + 7, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `hsla(${hue}, 95%, 90%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(lx, trussY + 7, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 舞台前沿 (LED 灯带 + 反光地面) ---- */
+function drawStageFront(energy) {
+  const t = performance.now() / 1000;
+  const edgeY = H * 0.985;
+  const floorGrad = ctx.createLinearGradient(0, edgeY - H * 0.15, 0, H);
+  floorGrad.addColorStop(0, 'rgba(20, 15, 35, 0)');
+  floorGrad.addColorStop(1, 'rgba(60, 40, 90, 0.35)');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, edgeY - H * 0.15, W, H * 0.15 + (H - edgeY));
+
+  ctx.globalCompositeOperation = 'lighter';
+  const segCount = 40;
+  for (let i = 0; i < segCount; i++) {
+    const x1 = (W / segCount) * i;
+    const x2 = (W / segCount) * (i + 1);
+    const hue = (i * 12 + t * 60) % 360;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4 + i * 0.4);
+    const alpha = (0.35 + energy.bass * 0.5) * (0.5 + pulse * 0.5);
+    ctx.strokeStyle = `hsla(${hue}, 95%, 65%, ${alpha})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x1, edgeY);
+    ctx.lineTo(x2, edgeY);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 舞台摇头灯 (动感扫射 + 旋律脉动) ---- */
+function drawSpotlight(energy) {
+  const t = performance.now() / 1000;
+  const driftX = Math.cos(t * 0.02) * W * 0.05;
+  const mx = W * 0.5 + driftX;
+  const my = H * 0.03;
+
+  // 灯头左右摇摆扫射, 朝下方舞台照射
+  const swing = Math.sin(t * 0.35) * 0.6 + Math.sin(t * 0.9 + 1.3) * 0.18 * energy.overall;
+  const centerAng = Math.PI / 2 + swing;
+  const spread = 0.085 + energy.bass * 0.05;
+  const beamLen = H * 1.08;
+
+  const hue = (200 + Math.sin(t * 0.15) * 70 + energy.mid * 50) % 360;
+  const flicker = 0.7 + 0.3 * Math.sin(t * 6 + energy.bass * 10);
+  const alpha = (0.16 + energy.bass * 0.24) * flicker;
+
+  const a1 = centerAng - spread;
+  const a2 = centerAng + spread;
+  const x1 = mx + Math.cos(a1) * beamLen;
+  const y1 = my + Math.sin(a1) * beamLen;
+  const x2 = mx + Math.cos(a2) * beamLen;
+  const y2 = my + Math.sin(a2) * beamLen;
+
+  ctx.globalCompositeOperation = 'lighter';
+
+  // 光束主体 (体积光锥)
+  const beamGrad = ctx.createLinearGradient(mx, my, (x1 + x2) / 2, (y1 + y2) / 2);
+  beamGrad.addColorStop(0, `hsla(${hue}, 90%, 75%, ${alpha})`);
+  beamGrad.addColorStop(0.6, `hsla(${hue}, 85%, 65%, ${alpha * 0.4})`);
+  beamGrad.addColorStop(1, `hsla(${hue}, 80%, 55%, 0)`);
+  ctx.fillStyle = beamGrad;
+  ctx.beginPath();
+  ctx.moveTo(mx, my);
+  ctx.lineTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.closePath();
+  ctx.fill();
+
+  // 光锥内的丝状光束 (增强动感与体积感)
+  const rayCount = 6;
+  for (let i = 0; i < rayCount; i++) {
+    const rt = i / (rayCount - 1);
+    const ang = a1 + (a2 - a1) * rt;
+    const rx = mx + Math.cos(ang) * beamLen;
+    const ry = my + Math.sin(ang) * beamLen;
+    const rayA = alpha * (0.5 + 0.5 * Math.sin(t * 3 + i * 1.7)) * 0.5;
+    const rg = ctx.createLinearGradient(mx, my, rx, ry);
+    rg.addColorStop(0, `hsla(${hue}, 95%, 85%, ${rayA})`);
+    rg.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`);
+    ctx.strokeStyle = rg;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.lineTo(rx, ry);
+    ctx.stroke();
+  }
+
+  // 灯具光源本体
+  const fixtureR = Math.min(W, H) * (0.018 + energy.bass * 0.012);
+  const coreGlow = ctx.createRadialGradient(mx, my, 0, mx, my, fixtureR * 5);
+  coreGlow.addColorStop(0, `hsla(${hue}, 60%, 95%, ${0.7 + energy.bass * 0.3})`);
+  coreGlow.addColorStop(1, `hsla(${hue}, 60%, 90%, 0)`);
+  ctx.fillStyle = coreGlow;
+  ctx.beginPath();
+  ctx.arc(mx, my, fixtureR * 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(mx, my, fixtureR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 舞台背景 (暗场氛围 + 雾气) ---- */
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#05040f');
+  g.addColorStop(0.35, '#0a0818');
+  g.addColorStop(0.7, '#120a1c');
+  g.addColorStop(1, '#1a0f1a');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // 舞台氛围光晕
+  ctx.globalCompositeOperation = 'lighter';
+  const t = performance.now() / 1000;
+  const glows = [
+    { h: 195, ox: -0.25, oy: 0.05 },
+    { h: 320, ox: 0.28, oy: 0.08 },
+    { h: 45, ox: 0.02, oy: -0.05 }
+  ];
+  for (let i = 0; i < glows.length; i++) {
+    const c = glows[i];
+    const bx = W * 0.5 + Math.cos(t * 0.05 + i * 2) * W * 0.12 + W * c.ox;
+    const by = H * 0.75 + Math.sin(t * 0.04 + i * 1.5) * H * 0.06 + H * c.oy;
+    const rad = Math.min(W, H) * 0.4;
+    const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rad);
+    rg.addColorStop(0, `hsla(${c.h}, 80%, 55%, 0.05)`);
+    rg.addColorStop(0.6, `hsla(${c.h}, 70%, 45%, 0.02)`);
+    rg.addColorStop(1, 'hsla(0,0%,0%,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(bx, by, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // 地面薄雾
+  const fog = ctx.createLinearGradient(0, H * 0.7, 0, H);
+  fog.addColorStop(0, 'rgba(160, 170, 220, 0)');
+  fog.addColorStop(1, 'rgba(160, 170, 220, 0.08)');
+  ctx.fillStyle = fog;
+  ctx.fillRect(0, H * 0.7, W, H * 0.3);
+}
+
+/* ---- 荧光棒绘制 ---- */
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function drawGlowsticks(dt, energy) {
+  const t = performance.now() / 1000;
+  const swayAmp = 0.35 + energy.overall * 0.9 + energy.bass * 0.5;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const g of glowsticks) {
+    const sway = Math.sin(t * g.swaySpeed + g.swayPhase) * swayAmp;
+    const ang = g.angle + sway;
+    const baseX = g.x;
+    const baseY = g.baseY;
+    const tipX = baseX + Math.sin(ang) * g.len;
+    const tipY = baseY - Math.cos(ang) * g.len;
+    const flick = 0.55 + 0.45 * Math.sin(t * g.flickerSpeed + g.flickerPhase);
+    const pulse = 1 + energy.overall * 0.7 + energy.bass * 0.5;
+    const alpha = Math.min(1, (0.35 + flick * 0.4) * (0.5 + g.depth * 0.6) * pulse);
+    const width = 1.6 + g.depth * 2.2;
+
+    // 光棒杆身
+    const grad = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
+    grad.addColorStop(0, hexA(g.color, alpha * 0.15));
+    grad.addColorStop(1, hexA(g.color, alpha * 0.9));
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+
+    // 顶部光晕
+    const glowR = (5 + g.depth * 10) * pulse;
+    const glow = ctx.createRadialGradient(tipX, tipY, 0, tipX, tipY, glowR);
+    glow.addColorStop(0, hexA(g.color, alpha));
+    glow.addColorStop(0.5, hexA(g.color, alpha * 0.4));
+    glow.addColorStop(1, hexA(g.color, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, glowR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 顶端亮芯
+    ctx.fillStyle = hexA('#ffffff', Math.min(1, alpha + 0.2));
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, width * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 歌词 ---- */
+let lyrics = [], curLyric = -1;
+const lyricEl = document.getElementById('lyric');
+const lyricNextEl = document.getElementById('lyricNext');
+
+async function loadLyrics() {
+  try {
+    const text = await (await fetch('heisemaoyi.lrc')).text();
+    const skip = ['词：', '曲：', '编曲', '制作', '人：', '和声', '混音', '母带', '监制'];
+    const re = /\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)/;
+    lyrics = text.split(/\r?\n/).map(l => {
+      const m = l.match(re); if (!m) return null;
+      const t = m[4].trim(); if (!t || skip.some(s => t.includes(s))) return null;
+      const frac = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) / 1000 : 0;
+      return { time: +m[1] * 60 + +m[2] + frac, text: t };
+    }).filter(Boolean).sort((a, b) => a.time - b.time);
+  } catch (e) { lyrics = []; }
+}
+
+function updateLyrics(t) {
+  if (!lyrics.length) return;
+  let idx = -1;
+  for (let i = 0; i < lyrics.length; i++) {
+    if (t >= lyrics[i].time) idx = i; else break;
+  }
+  if (idx !== curLyric) {
+    curLyric = idx;
+    const lineStart = idx >= 0 ? lyrics[idx].time : 0;
+    const lineEnd = (idx + 1 < lyrics.length) ? lyrics[idx + 1].time : lineStart + 5;
+    setLyricText(idx >= 0 ? lyrics[idx].text : '', lineStart, lineEnd);
+    lyricNextEl.textContent = (idx + 1 < lyrics.length) ? lyrics[idx + 1].text : '';
+  }
+}
+
+loadLyrics();
+
+/* ---- 星星拼歌词特效 ---- */
+const lyricCanvas = document.createElement('canvas');
+const lyricCtx = lyricCanvas.getContext('2d');
+const PARTICLES_PER_CHAR = 400;
+const MAX_PARTICLE_COUNT = 5000;
+const LYRIC_COLORS = GLOWSTICK_COLORS;
+let lyricParticles = [];
+let activeParticleCount = 0;
+
+// 预渲染辉光精灵图，避免每帧创建数千个径向渐变
+const glowSpriteSize = 32;
+const glowCanvas = document.createElement('canvas');
+glowCanvas.width = glowSpriteSize;
+glowCanvas.height = glowSpriteSize;
+const glowCtx = glowCanvas.getContext('2d');
+const glowGrad = glowCtx.createRadialGradient(glowSpriteSize / 2, glowSpriteSize / 2, 0, glowSpriteSize / 2, glowSpriteSize / 2, glowSpriteSize / 2);
+glowGrad.addColorStop(0, '#fff');
+glowGrad.addColorStop(1, 'transparent');
+glowCtx.fillStyle = glowGrad;
+glowCtx.fillRect(0, 0, glowSpriteSize, glowSpriteSize);
+let lyricStarActive = false;
+let lyricStarOpacity = 0;
+let lyricPhase = 'idle';
+let pendingCharTargets = null;
+let disperseTimer = 0;
+let currentCharTargets = [];
+let currentLineStart = 0;
+let currentLineEnd = 0;
+let currentTotalChars = 0;
+const DISPERSE_DURATION = 0.1;
+
+function initLyricParticles() {
+  lyricParticles = [];
+  for (let i = 0; i < MAX_PARTICLE_COUNT; i++) {
+    lyricParticles.push({
+      x: Math.random() * W, y: Math.random() * H,
+      hx: Math.random() * W, hy: Math.random() * H,
+      tx: 0, ty: 0, hasTarget: false,
+      tw: Math.random() * Math.PI * 2,
+      tws: 0.5 + Math.random() * 1.5,
+      r: 0.8 + Math.random() * 0.6,
+      color: LYRIC_COLORS[(Math.random() * LYRIC_COLORS.length) | 0],
+      formEase: 0.35,
+      disperseEase: 0.6,
+      revealIdx: -1
+    });
+  }
+}
+initLyricParticles();
+
+function getTextTargetsPerChar(text) {
+  if (!text) return [];
+  const segments = text.split(/\s+/).filter(s => s.length > 0);
+  let fontSize = Math.min(W * 0.12, H * 0.14, 78);
+  const colGap = 20;
+  const maxTotalW = W * 0.85;
+  lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+  let charW = lyricCtx.measureText('一').width;
+  while ((charW + colGap) * segments.length > maxTotalW && fontSize > 20) {
+    fontSize -= 2;
+    lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+    charW = lyricCtx.measureText('一').width;
+  }
+  const lineH = Math.ceil(fontSize * 1.25);
+  const colW = Math.ceil(charW) + colGap;
+  const maxColChars = Math.max(...segments.map(s => [...s].length));
+  const th = lineH * maxColChars;
+  const tw = colW * segments.length;
+  lyricCanvas.width = tw;
+  lyricCanvas.height = th;
+  lyricCtx.font = `400 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
+  lyricCtx.fillStyle = '#fff';
+  lyricCtx.textBaseline = 'middle';
+  lyricCtx.textAlign = 'center';
+  const charList = [];
+  for (let col = 0; col < segments.length; col++) {
+    const chars = [...segments[col]];
+    for (let i = 0; i < chars.length; i++) {
+      charList.push({ char: chars[i], col, row: i });
+    }
+  }
+  const charTargets = [];
+  for (const c of charList) {
+    lyricCtx.clearRect(0, 0, tw, th);
+    const colX = (segments.length - 1 - c.col) * colW + colW / 2;
+    lyricCtx.fillText(c.char, colX, lineH * c.row + lineH / 2);
+    const imgData = lyricCtx.getImageData(0, 0, tw, th);
+    const targets = [];
+    const step = 2;
+    for (let y = 0; y < th; y += step) {
+      for (let x = 0; x < tw; x += step) {
+        const idx = (y * tw + x) * 4;
+        if (imgData.data[idx + 3] > 128) {
+          targets.push({ x: x - tw / 2, y: y - th / 2 });
+        }
+      }
+    }
+    charTargets.push(targets);
+  }
+  return charTargets;
+}
+
+function assignTargetsWithReveal(charTargets) {
+  const allTargets = [];
+  for (let i = 0; i < charTargets.length; i++) {
+    for (const t of charTargets[i]) {
+      allTargets.push({ x: t.x, y: t.y, charIdx: i });
+    }
+  }
+  
+  // 动态计算需要的粒子数
+  activeParticleCount = Math.min(allTargets.length, MAX_PARTICLE_COUNT);
+
+  if (!allTargets.length) {
+    lyricStarActive = false;
+    return;
+  }
+  
+  for (let i = allTargets.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [allTargets[i], allTargets[j]] = [allTargets[j], allTargets[i]];
+  }
+  const cx = W / 2;
+  const cy = H * 0.5;
+  for (let i = 0; i < activeParticleCount; i++) {
+    lyricParticles[i].tx = allTargets[i].x + cx;
+    lyricParticles[i].ty = allTargets[i].y + cy;
+    lyricParticles[i].revealIdx = allTargets[i].charIdx;
+    lyricParticles[i].hasTarget = false;
+  }
+  lyricStarActive = true;
+}
+
+function setLyricText(text, lineStart, lineEnd) {
+  if (!text) {
+    lyricStarActive = false;
+    lyricPhase = 'idle';
+    currentCharTargets = [];
+    currentTotalChars = 0;
+    activeParticleCount = 0;
+    return;
+  }
+  const charTargets = getTextTargetsPerChar(text);
+  currentLineStart = lineStart;
+  currentLineEnd = lineEnd;
+  currentTotalChars = charTargets.length;
+  if (lyricPhase === 'forming') {
+    for (let i = 0; i < activeParticleCount; i++) {
+      const p = lyricParticles[i];
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * Math.min(W, H) * 0.3;
+      p.hx = p.x + Math.cos(angle) * dist;
+      p.hy = p.y + Math.sin(angle) * dist;
+      p.hasTarget = false;
+      p.revealIdx = -1;
+    }
+    pendingCharTargets = charTargets;
+    lyricPhase = 'dispersing';
+    disperseTimer = DISPERSE_DURATION;
+  } else {
+    currentCharTargets = charTargets;
+    assignTargetsWithReveal(charTargets);
+    lyricPhase = 'forming';
+  }
+}
+
+function drawLyricStars(dt, energy) {
+  const t = performance.now() / 1000;
+  if (lyricPhase === 'dispersing') {
+    disperseTimer -= dt;
+    if (disperseTimer <= 0) {
+      currentCharTargets = pendingCharTargets;
+      assignTargetsWithReveal(pendingCharTargets);
+      pendingCharTargets = null;
+      lyricPhase = 'forming';
+    }
+  }
+  if (lyricPhase === 'forming' && currentTotalChars > 0) {
+    const audioT = audioEl.currentTime;
+    const lineDur = currentLineEnd - currentLineStart;
+    const revealDur = lineDur >= 10 ? 2 : Math.max(0.5, lineDur * 0.8);
+    const progress = Math.max(0, Math.min(1, (audioT - currentLineStart) / revealDur));
+    const numRevealed = Math.ceil(progress * currentTotalChars);
+    for (let i = 0; i < activeParticleCount; i++) {
+      const p = lyricParticles[i];
+      if (p.revealIdx >= 0 && p.revealIdx < numRevealed) {
+        p.hasTarget = true;
+      }
+    }
+  }
+  const targetOpacity = (lyricPhase === 'forming' || lyricPhase === 'dispersing') ? 1 : 0;
+  lyricStarOpacity += (targetOpacity - lyricStarOpacity) * 0.04;
+  if (lyricStarOpacity < 0.01) return;
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < activeParticleCount; i++) {
+    const p = lyricParticles[i];
+    const targetX = p.hasTarget ? p.tx : p.hx;
+    const targetY = p.hasTarget ? p.ty : p.hy;
+    const ease = p.hasTarget ? p.formEase : p.disperseEase;
+    p.x += (targetX - p.x) * ease;
+    p.y += (targetY - p.y) * ease;
+    let px = p.x, py = p.y;
+    if (!p.hasTarget) {
+      const danceAmp = 4 + energy.overall * 30 + energy.bass * 20;
+      const danceAmpY = 3 + energy.mid * 22 + energy.treble * 12;
+      px += Math.sin(t * p.tws * 1.5 + p.tw) * danceAmp;
+      py += Math.cos(t * p.tws * 1.2 + p.tw) * danceAmpY;
+    }
+    const tw = 0.6 + 0.4 * Math.sin(t * p.tws + p.tw);
+    const forming = p.hasTarget ? lyricStarOpacity : lyricStarOpacity * 0.2;
+    const pulse = p.hasTarget ? 1 : (1 + energy.overall * 0.8 + energy.bass * 0.4);
+    const a = Math.min(1, (0.6 + tw * 0.35) * forming * pulse);
+    const r = p.r * (1 + tw * 0.1) * (p.hasTarget ? 1 : (1 + energy.treble * 0.3));
+    const glowR = r * 2.5;
+    // 使用预渲染辉光精灵图替代径向渐变
+    ctx.globalAlpha = a * 0.85;
+    ctx.drawImage(glowCanvas, px - glowR, py - glowR, glowR * 2, glowR * 2);
+    // 核心光点 (荧光棒光珠)
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = Math.min(1, a + 0.45);
+    const cr = r * 1.1;
+    ctx.beginPath();
+    ctx.arc(px, py, cr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = Math.min(1, a + 0.55) * 0.7;
+    ctx.beginPath();
+    ctx.arc(px, py, cr * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function lyricStarResize() {
+  for (const p of lyricParticles) {
+    p.hx = Math.random() * W;
+    p.hy = Math.random() * H;
+  }
+  if (curLyric >= 0 && lyrics[curLyric]) {
+    const lineStart = lyrics[curLyric].time;
+    const lineEnd = (curLyric + 1 < lyrics.length) ? lyrics[curLyric + 1].time : lineStart + 5;
+    setLyricText(lyrics[curLyric].text, lineStart, lineEnd);
+  }
+}
+addEventListener('resize', lyricStarResize);
+
+/* ---- 飘落花瓣 ---- */
+const petals = [];
+function initPetals() {
+  petals.length = 0;
+  const n = 18;
+  for (let i = 0; i < n; i++) {
+    petals.push({
+      x: Math.random() * W, y: Math.random() * H - H,
+      vx: (Math.random() - 0.5) * 12,
+      vy: 8 + Math.random() * 12,
+      rot: Math.random() * Math.PI * 2,
+      rotSpeed: (Math.random() - 0.5) * 1.5,
+      size: 6 + Math.random() * 10,
+      hue: Math.random() * 360,
+      alpha: 0.3 + Math.random() * 0.3,
+      sway: Math.random() * Math.PI * 2,
+      swaySpeed: 0.5 + Math.random()
+    });
+  }
+}
+initPetals();
+addEventListener('resize', initPetals);
+
+function drawPetals(dt, energy) {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of petals) {
+    p.sway += dt * p.swaySpeed;
+    p.x += p.vx * dt + Math.sin(p.sway) * 8 * dt;
+    p.y += p.vy * dt * (1 + energy.overall * 0.5);
+    p.rot += p.rotSpeed * dt;
+    if (p.y > H + 20) { p.y = -20; p.x = Math.random() * W; }
+    if (p.x < -20) p.x = W + 20;
+    if (p.x > W + 20) p.x = -20;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    const sz = p.size * (1 + energy.mid * 0.15);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, sz);
+    g.addColorStop(0, `hsla(${p.hue}, 80%, 75%, ${p.alpha})`);
+    g.addColorStop(0.6, `hsla(${p.hue}, 70%, 60%, ${p.alpha * 0.4})`);
+    g.addColorStop(1, `hsla(${p.hue}, 60%, 50%, 0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz, sz * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 舞台激光扫射 ---- */
+let laserOffset = 0;
+function drawLaserBeams(energy) {
+  laserOffset += 0.006 + energy.overall * 0.01;
+  const originX = W * 0.5;
+  const originY = H * 0.02;
+  const beams = [
+    { hue: 185, spread: 0.16, speed: 0.6, len: 1.05, alpha: 0.10 },
+    { hue: 300, spread: 0.13, speed: -0.45, len: 1.0, alpha: 0.09 },
+    { hue: 50, spread: 0.1, speed: 0.35, len: 0.95, alpha: 0.08 },
+    { hue: 150, spread: 0.12, speed: -0.55, len: 1.0, alpha: 0.07 }
+  ];
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < beams.length; i++) {
+    const b = beams[i];
+    const centerAng = -Math.PI / 2 + Math.sin(laserOffset * b.speed + i * 1.7) * 0.9;
+    const halfSpread = b.spread * (1 + energy.bass * 0.6);
+    const len = Math.max(W, H) * b.len;
+    const a1 = centerAng - halfSpread;
+    const a2 = centerAng + halfSpread;
+    const x1 = originX + Math.cos(a1) * len;
+    const y1 = originY + Math.sin(a1) * len;
+    const x2 = originX + Math.cos(a2) * len;
+    const y2 = originY + Math.sin(a2) * len;
+    const grad = ctx.createLinearGradient(originX, originY, (x1 + x2) / 2, (y1 + y2) / 2);
+    const alpha = b.alpha * (1 + energy.mid * 0.9);
+    grad.addColorStop(0, `hsla(${b.hue}, 90%, 70%, ${alpha})`);
+    grad.addColorStop(1, `hsla(${b.hue}, 90%, 60%, 0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 爱心光点 ---- */
+const hearts = [];
+let heartTimer = 0;
+function updateHearts(dt, energy) {
+  heartTimer -= dt;
+  const interval = Math.max(0.5, 3 - energy.overall * 2);
+  if (heartTimer <= 0) {
+    hearts.push({
+      x: Math.random() * W,
+      y: H + 10,
+      vy: -(15 + Math.random() * 20 + energy.overall * 30),
+      vx: (Math.random() - 0.5) * 6,
+      size: 4 + Math.random() * 6,
+      hue: 340 + Math.random() * 20,
+      life: 0,
+      max: 4 + Math.random() * 3,
+      sway: Math.random() * Math.PI * 2
+    });
+    heartTimer = interval + Math.random();
+  }
+  for (const h of hearts) {
+    h.life += dt;
+    h.sway += dt * 2;
+    h.x += h.vx * dt + Math.sin(h.sway) * 5 * dt;
+    h.y += h.vy * dt;
+    h.vy += 3 * dt;
+  }
+  for (let i = hearts.length - 1; i >= 0; i--) {
+    if (hearts[i].life > hearts[i].max || hearts[i].y < -30) hearts.splice(i, 1);
+  }
+}
+
+function drawHearts() {
+  const t = performance.now() / 1000;
+  ctx.globalCompositeOperation = 'lighter';
+  for (const h of hearts) {
+    const p = h.life / h.max;
+    const a = Math.sin(Math.min(1, p) * Math.PI) * 0.5;
+    const sz = h.size * (1 + Math.sin(t * 3 + h.sway) * 0.1);
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, sz * 3);
+    g.addColorStop(0, `hsla(${h.hue}, 90%, 80%, ${a})`);
+    g.addColorStop(0.5, `hsla(${h.hue}, 80%, 65%, ${a * 0.3})`);
+    g.addColorStop(1, `hsla(${h.hue}, 70%, 55%, 0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, sz * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `hsla(${h.hue}, 95%, 85%, ${a * 0.8})`;
+    ctx.beginPath();
+    const s = sz * 0.5;
+    ctx.moveTo(0, s * 0.3);
+    ctx.bezierCurveTo(-s, -s * 0.5, -s * 1.2, s * 0.5, 0, s * 1.2);
+    ctx.bezierCurveTo(s * 1.2, s * 0.5, s, -s * 0.5, 0, s * 0.3);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 主循环 ---- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000) || 0;
+  last = now;
+  const energy = getEnergy();
+  drawBackground();
+  drawStageRig(energy);
+  drawLaserBeams(energy);
+  drawSpotlight(energy);
+  drawGlowsticks(dt, energy);
+  drawLyricStars(dt, energy);
+  drawFireflies(dt);
+  drawPetals(dt, energy);
+  updateHearts(dt, energy);
+  drawHearts();
+  updateMeteors(dt, energy);
+  drawMeteors();
+  drawStageFront(energy);
+  updateLyrics(audioEl.currentTime);
+  document.documentElement.style.setProperty('--bass', energy.bass.toFixed(3));
+  document.documentElement.style.setProperty('--mid', energy.mid.toFixed(3));
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ============================================================
+   播放器逻辑
+   ============================================================ */
+const audio = document.getElementById('audio');
+const disc = document.getElementById('disc');
+const playBtn = document.getElementById('playBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const fill = document.getElementById('fill');
+const track = document.getElementById('track');
+const curTime = document.getElementById('curTime');
+const durTime = document.getElementById('durTime');
+const vol = document.getElementById('vol');
+const player = document.getElementById('playerWrap');
+const hint = document.getElementById('hint');
+
+audio.volume = 1;
+
+function fmt(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return m + ':' + String(ss).padStart(2, '0');
+}
+
+function togglePlay() {
+  if (audio.paused) {
+    if (!audioReady) setupAudio();
+    if (actx && actx.state === 'suspended') actx.resume();
+    audio.play().catch(e => console.warn(e));
+  } else {
+    audio.pause();
+  }
+}
+
+audio.addEventListener('play', () => {
+  playBtn.innerHTML = '&#10074;&#10074;';
+  disc.classList.add('playing');
+  playBtn.classList.add('playing');
+});
+audio.addEventListener('pause', () => {
+  playBtn.innerHTML = '&#9654;';
+  disc.classList.remove('playing');
+  playBtn.classList.remove('playing');
+});
+audio.addEventListener('loadedmetadata', () => {
+  durTime.textContent = fmt(audio.duration);
+});
+audio.addEventListener('timeupdate', () => {
+  if (audio.duration) {
+    fill.style.width = (audio.currentTime / audio.duration * 100) + '%';
+    curTime.textContent = fmt(audio.currentTime);
+  }
+});
+audio.addEventListener('ended', () => {
+  audio.currentTime = 0;
+  audio.play();
+});
+
+function spawnRipple(btn, e) {
+  const rect = btn.getBoundingClientRect();
+  const r = document.createElement('span');
+  r.className = 'ripple';
+  const size = Math.max(rect.width, rect.height);
+  r.style.width = r.style.height = size + 'px';
+  r.style.left = (e.clientX - rect.left - size / 2) + 'px';
+  r.style.top = (e.clientY - rect.top - size / 2) + 'px';
+  btn.appendChild(r);
+  setTimeout(() => r.remove(), 600);
+}
+[playBtn, prevBtn, nextBtn].forEach(btn => {
+  btn.addEventListener('click', (e) => spawnRipple(btn, e));
+});
+
+playBtn.addEventListener('click', (e) => {
+  e.stopPropagation(); togglePlay();
+  if (!audio.paused) { player.classList.add('hidden'); hint.classList.add('fade'); clearTimeout(hideTimer); }
+});
+prevBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = 0; });
+nextBtn.addEventListener('click', (e) => { e.stopPropagation(); audio.currentTime = Math.max(0, audio.currentTime - 10); });
+
+track.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!audio.duration) return;
+  const rect = track.getBoundingClientRect();
+  const pct = (e.clientX - rect.left) / rect.width;
+  audio.currentTime = pct * audio.duration;
+});
+
+vol.addEventListener('input', (e) => {
+  audio.volume = parseFloat(e.target.value);
+});
+vol.addEventListener('click', (e) => e.stopPropagation());
+
+// 点击空白处唤出/隐藏播放器
+let hideTimer;
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#playerWrap')) return;
+  player.classList.remove('hidden');
+  hint.classList.add('fade');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    if (!audio.paused) player.classList.add('hidden');
+  }, 6000);
+});
+
+// 鼠标移动也唤出
+document.addEventListener('mousemove', () => {
+  player.classList.remove('hidden');
+  hint.classList.add('fade');
+  clearTimeout(hideTimer);
+  hideTimer = setTimeout(() => {
+    if (!audio.paused) player.classList.add('hidden');
+  }, 6000);
+});
+
+// 卡片轻微 3D 视差效果
+const playerCard = document.getElementById('player');
+playerCard.addEventListener('mousemove', (e) => {
+  const rect = playerCard.getBoundingClientRect();
+  const px = (e.clientX - rect.left) / rect.width - 0.5;
+  const py = (e.clientY - rect.top) / rect.height - 0.5;
+  playerCard.style.transform = `rotateX(${(-py * 8).toFixed(2)}deg) rotateY(${(px * 8).toFixed(2)}deg)`;
+});
+playerCard.addEventListener('mouseleave', () => {
+  playerCard.style.transform = 'rotateX(0deg) rotateY(0deg)';
+});
+
+// 初始提示淡出
+setTimeout(() => hint.classList.add('fade'), 5000);
+</script>
+</body>
+</html>
