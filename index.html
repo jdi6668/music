@@ -277,31 +277,31 @@ function resize() {
 }
 addEventListener('resize', resize); resize();
 
-/* ---- 星空 ---- */
-const STAR_COLORS = ['#ffffff', '#cfe6ff', '#e8d8ff', '#ffe9b8', '#bfeaff'];
-let stars = [];
-function initStars() {
-  stars = [];
-  const n = Math.round((W * H) / 3500);
+/* ---- 荧光棒人海 ---- */
+const GLOWSTICK_COLORS = ['#00eaff', '#ff2fd6', '#7cff4f', '#ffe83d', '#ff5b3d', '#7b6cff', '#3dffe0', '#ff3d9a'];
+let glowsticks = [];
+function initGlowsticks() {
+  glowsticks = [];
+  const n = Math.round((W * H) / 5500);
   for (let i = 0; i < n; i++) {
-    const bright = Math.random();
-    stars.push({
-      x: Math.random() * W, y: Math.random() * H,
-      bx: 0, by: 0,
-      r: bright > 0.95 ? 1.4 + Math.random() * 1.2 : Math.random() * 0.9 + 0.2,
-      tw: Math.random() * Math.PI * 2,
-      tws: 0.3 + Math.random() * 1.2,
-      color: STAR_COLORS[(Math.random() * STAR_COLORS.length) | 0],
-      flare: bright > 0.97,
-      phase: Math.random() * Math.PI * 2,
-      freq: 0.5 + Math.random() * 1.5,
-      trail: [],
-      trailTimer: 0
+    const depth = Math.random();
+    glowsticks.push({
+      x: Math.random() * W,
+      baseY: H * (0.55 + depth * 0.5) + Math.random() * 20,
+      depth,
+      len: 26 + depth * 46 + Math.random() * 10,
+      angle: (Math.random() - 0.5) * 0.6,
+      swayPhase: Math.random() * Math.PI * 2,
+      swaySpeed: 0.6 + Math.random() * 1.0,
+      color: GLOWSTICK_COLORS[(Math.random() * GLOWSTICK_COLORS.length) | 0],
+      flickerPhase: Math.random() * Math.PI * 2,
+      flickerSpeed: 1 + Math.random() * 2
     });
   }
+  glowsticks.sort((a, b) => a.depth - b.depth);
 }
-initStars();
-addEventListener('resize', initStars);
+initGlowsticks();
+addEventListener('resize', initGlowsticks);
 
 /* ---- 音频分析 ---- */
 const audioEl = document.getElementById('audio');
@@ -525,14 +525,14 @@ function drawFireflies(dt) {
     if (f.y > H + 10) f.y = -10;
     const glow = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(f.phase));
     const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * 6);
-    g.addColorStop(0, `rgba(180, 220, 150, ${glow * 0.6})`);
-    g.addColorStop(0.5, `rgba(150, 200, 120, ${glow * 0.15})`);
-    g.addColorStop(1, 'rgba(100, 150, 80, 0)');
+    g.addColorStop(0, `rgba(200, 220, 255, ${glow * 0.6})`);
+    g.addColorStop(0.5, `rgba(170, 200, 255, ${glow * 0.15})`);
+    g.addColorStop(1, 'rgba(120, 150, 220, 0)');
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(f.x, f.y, f.r * 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = `rgba(200, 240, 170, ${glow * 0.8})`;
+    ctx.fillStyle = `rgba(230, 240, 255, ${glow * 0.8})`;
     ctx.beginPath();
     ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
     ctx.fill();
@@ -540,79 +540,63 @@ function drawFireflies(dt) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-/* ---- 月亮 (缓慢漂移 + 旋律呼吸) ---- */
-let moonAngle = 0;
-function drawMoon(energy) {
+/* ---- 舞台主追光 (缓慢漂移 + 旋律呼吸) ---- */
+function drawSpotlight(energy) {
   const t = performance.now() / 1000;
-  // 缓慢沿弧线漂移: 从右上缓缓移向中上再回来
-  moonAngle += 0.0003;
   const driftX = Math.cos(t * 0.03) * W * 0.06;
   const driftY = Math.sin(t * 0.025) * H * 0.04;
-  const mx = W * 0.82 + driftX;
-  const my = H * 0.18 + driftY;
+  const mx = W * 0.5 + driftX;
+  const my = H * 0.08 + driftY;
   // 大小随低频呼吸
-  const mr = Math.min(W, H) * (0.05 + energy.bass * 0.015);
+  const mr = Math.min(W, H) * (0.045 + energy.bass * 0.02);
   // 光晕亮度随旋律脉动
-  const haloAlpha = 0.12 + energy.mid * 0.12 + energy.bass * 0.08;
+  const haloAlpha = 0.16 + energy.mid * 0.16 + energy.bass * 0.12;
   ctx.globalCompositeOperation = 'lighter';
-  const halo = ctx.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * (4 + energy.overall * 1.5));
-  halo.addColorStop(0, `rgba(230, 235, 255, ${haloAlpha})`);
-  halo.addColorStop(0.5, `rgba(200, 215, 255, ${haloAlpha * 0.35})`);
-  halo.addColorStop(1, 'rgba(180, 200, 240, 0)');
+  const halo = ctx.createRadialGradient(mx, my, mr * 0.6, mx, my, mr * (6 + energy.overall * 3));
+  halo.addColorStop(0, `rgba(220, 240, 255, ${haloAlpha})`);
+  halo.addColorStop(0.4, `rgba(160, 210, 255, ${haloAlpha * 0.4})`);
+  halo.addColorStop(1, 'rgba(120, 180, 255, 0)');
   ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(mx, my, mr * (4 + energy.overall * 1.5), 0, Math.PI * 2);
+  ctx.arc(mx, my, mr * (6 + energy.overall * 3), 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
-  // 月球本体 (自转: 光源角度缓慢旋转)
-  const lightAng = t * 0.08;
-  const lx = mx - mr * 0.3 * Math.cos(lightAng);
-  const ly = my - mr * 0.3 * Math.sin(lightAng);
-  const g = ctx.createRadialGradient(lx, ly, mr * 0.1, mx, my, mr);
-  g.addColorStop(0, '#f0f4ff');
-  g.addColorStop(0.6, '#d0d8ee');
-  g.addColorStop(1, '#a0aac8');
+  const g = ctx.createRadialGradient(mx - mr * 0.2, my - mr * 0.2, mr * 0.1, mx, my, mr);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.6, '#cfe8ff');
+  g.addColorStop(1, '#8fb8f0');
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.arc(mx, my, mr, 0, Math.PI * 2);
   ctx.fill();
-  // 环形山 (随自转旋转)
-  ctx.save();
-  ctx.translate(mx, my);
-  ctx.rotate(t * 0.06);
-  ctx.fillStyle = 'rgba(150, 160, 190, 0.2)';
-  ctx.beginPath(); ctx.arc(mr * 0.2, -mr * 0.1, mr * 0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(-mr * 0.15, mr * 0.25, mr * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(mr * 0.35, mr * 0.15, mr * 0.08, 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
+  ctx.globalCompositeOperation = 'source-over';
 }
 
-/* ---- 背景 ---- */
+/* ---- 舞台背景 (暗场氛围 + 雾气) ---- */
 function drawBackground() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#050818');
-  g.addColorStop(0.4, '#080a1e');
-  g.addColorStop(0.7, '#06081a');
-  g.addColorStop(1, '#03040e');
+  g.addColorStop(0, '#05040f');
+  g.addColorStop(0.35, '#0a0818');
+  g.addColorStop(0.7, '#120a1c');
+  g.addColorStop(1, '#1a0f1a');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // 远处微光
+  // 舞台氛围光晕
   ctx.globalCompositeOperation = 'lighter';
   const t = performance.now() / 1000;
-  const clouds = [
-    { h: 230, ox: -0.2, oy: -0.1 },
-    { h: 260, ox: 0.15, oy: 0.2 },
-    { h: 210, ox: 0.3, oy: -0.15 }
+  const glows = [
+    { h: 195, ox: -0.25, oy: 0.05 },
+    { h: 320, ox: 0.28, oy: 0.08 },
+    { h: 45, ox: 0.02, oy: -0.05 }
   ];
-  for (let i = 0; i < clouds.length; i++) {
-    const c = clouds[i];
-    const bx = W * 0.5 + Math.cos(t * 0.05 + i * 2) * W * 0.1 + W * c.ox;
-    const by = H * 0.5 + Math.sin(t * 0.04 + i * 1.5) * H * 0.08 + H * c.oy;
-    const rad = Math.min(W, H) * 0.35;
+  for (let i = 0; i < glows.length; i++) {
+    const c = glows[i];
+    const bx = W * 0.5 + Math.cos(t * 0.05 + i * 2) * W * 0.12 + W * c.ox;
+    const by = H * 0.75 + Math.sin(t * 0.04 + i * 1.5) * H * 0.06 + H * c.oy;
+    const rad = Math.min(W, H) * 0.4;
     const rg = ctx.createRadialGradient(bx, by, 0, bx, by, rad);
-    rg.addColorStop(0, `hsla(${c.h}, 70%, 50%, 0.04)`);
-    rg.addColorStop(0.6, `hsla(${c.h}, 60%, 40%, 0.015)`);
+    rg.addColorStop(0, `hsla(${c.h}, 80%, 55%, 0.05)`);
+    rg.addColorStop(0.6, `hsla(${c.h}, 70%, 45%, 0.02)`);
     rg.addColorStop(1, 'hsla(0,0%,0%,0)');
     ctx.fillStyle = rg;
     ctx.beginPath();
@@ -620,77 +604,65 @@ function drawBackground() {
     ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
+
+  // 地面薄雾
+  const fog = ctx.createLinearGradient(0, H * 0.7, 0, H);
+  fog.addColorStop(0, 'rgba(160, 170, 220, 0)');
+  fog.addColorStop(1, 'rgba(160, 170, 220, 0.08)');
+  ctx.fillStyle = fog;
+  ctx.fillRect(0, H * 0.7, W, H * 0.3);
 }
 
-/* ---- 星星绘制 ---- */
+/* ---- 荧光棒绘制 ---- */
 function hexA(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-function drawStars(dt, energy) {
+function drawGlowsticks(dt, energy) {
   const t = performance.now() / 1000;
+  const swayAmp = 0.35 + energy.overall * 0.9 + energy.bass * 0.5;
   ctx.globalCompositeOperation = 'lighter';
-  const amp = 3 + energy.overall * 25 + energy.bass * 15;
-  const ampY = 2 + energy.mid * 18 + energy.treble * 10;
-  for (const s of stars) {
-    s.y -= dt * (0.3 + s.r * 0.2);
-    if (s.y < -4) { s.y = H + 4; s.x = Math.random() * W; s.trail = []; }
-    const dx = Math.sin(t * s.freq + s.phase) * amp * (0.5 + s.r * 0.5);
-    const dy = Math.cos(t * s.freq * 0.8 + s.phase) * ampY * (0.5 + s.r * 0.5);
-    const px = s.x + dx;
-    const py = s.y + dy;
-    const tw = 0.4 + 0.6 * Math.sin(t * s.tws + s.tw);
-    const pulse = 1 + energy.overall * 0.8 + energy.bass * 0.4;
-    const a = Math.min(1, (0.15 + tw * 0.55) * (0.5 + s.r * 0.3) * pulse);
-    const r = s.r * (1 + tw * 0.15) * (1 + energy.treble * 0.3);
-    
-    // 更新轨迹
-    s.trailTimer -= dt;
-    if (s.trailTimer <= 0) {
-      s.trail.push({ x: px, y: py, age: 0 });
-      if (s.trail.length > 8) s.trail.shift();
-      s.trailTimer = 0.03 + Math.random() * 0.02;
-    }
-    for (const tp of s.trail) {
-      tp.age += dt;
-    }
-    s.trail = s.trail.filter(tp => tp.age < 0.25);
-    
-    // 绘制轨迹
-    for (let i = 0; i < s.trail.length; i++) {
-      const tp = s.trail[i];
-      const trailAlpha = (1 - tp.age / 0.25) * a * 0.3;
-      const trailR = r * (1 - tp.age / 0.25) * 0.6;
-      ctx.fillStyle = hexA(s.color, trailAlpha);
-      ctx.beginPath();
-      ctx.arc(tp.x, tp.y, trailR, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    // 柔光晕
-    const glow = ctx.createRadialGradient(px, py, 0, px, py, r * 3.5);
-    glow.addColorStop(0, hexA(s.color, a));
-    glow.addColorStop(1, hexA(s.color, 0));
+  for (const g of glowsticks) {
+    const sway = Math.sin(t * g.swaySpeed + g.swayPhase) * swayAmp;
+    const ang = g.angle + sway;
+    const baseX = g.x;
+    const baseY = g.baseY;
+    const tipX = baseX + Math.sin(ang) * g.len;
+    const tipY = baseY - Math.cos(ang) * g.len;
+    const flick = 0.55 + 0.45 * Math.sin(t * g.flickerSpeed + g.flickerPhase);
+    const pulse = 1 + energy.overall * 0.7 + energy.bass * 0.5;
+    const alpha = Math.min(1, (0.35 + flick * 0.4) * (0.5 + g.depth * 0.6) * pulse);
+    const width = 1.6 + g.depth * 2.2;
+
+    // 光棒杆身
+    const grad = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
+    grad.addColorStop(0, hexA(g.color, alpha * 0.15));
+    grad.addColorStop(1, hexA(g.color, alpha * 0.9));
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(baseX, baseY);
+    ctx.lineTo(tipX, tipY);
+    ctx.stroke();
+
+    // 顶部光晕
+    const glowR = (5 + g.depth * 10) * pulse;
+    const glow = ctx.createRadialGradient(tipX, tipY, 0, tipX, tipY, glowR);
+    glow.addColorStop(0, hexA(g.color, alpha));
+    glow.addColorStop(0.5, hexA(g.color, alpha * 0.4));
+    glow.addColorStop(1, hexA(g.color, 0));
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(px, py, r * 3.5, 0, Math.PI * 2);
+    ctx.arc(tipX, tipY, glowR, 0, Math.PI * 2);
     ctx.fill();
-    // 星芯
-    ctx.fillStyle = hexA(s.color, Math.min(1, a + 0.15));
+
+    // 顶端亮芯
+    ctx.fillStyle = hexA('#ffffff', Math.min(1, alpha + 0.2));
     ctx.beginPath();
-    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.arc(tipX, tipY, width * 0.8, 0, Math.PI * 2);
     ctx.fill();
-    // 亮星十字星芒
-    if (s.flare) {
-      const fl = (r + tw * 2) * 2.5 * (1 + energy.overall * 0.5);
-      ctx.strokeStyle = hexA(s.color, a * 0.6);
-      ctx.lineWidth = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(px - fl, py); ctx.lineTo(px + fl, py);
-      ctx.moveTo(px, py - fl); ctx.lineTo(px, py + fl);
-      ctx.stroke();
-    }
   }
   ctx.globalCompositeOperation = 'source-over';
 }
@@ -984,7 +956,7 @@ function initPetals() {
       rot: Math.random() * Math.PI * 2,
       rotSpeed: (Math.random() - 0.5) * 1.5,
       size: 6 + Math.random() * 10,
-      hue: 330 + Math.random() * 30,
+      hue: Math.random() * 360,
       alpha: 0.3 + Math.random() * 0.3,
       sway: Math.random() * Math.PI * 2,
       swaySpeed: 0.5 + Math.random()
@@ -1022,37 +994,40 @@ function drawPetals(dt, energy) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-/* ---- 极光丝带 ---- */
-let auroraOffset = 0;
-function drawAurora(energy) {
-  const t = performance.now() / 1000;
-  auroraOffset += 0.003 + energy.overall * 0.004;
-  ctx.globalCompositeOperation = 'lighter';
-  const ribbons = [
-    { hue: 280, yBase: 0.15, amp: 0.06, freq: 1.2, alpha: 0.06 },
-    { hue: 200, yBase: 0.22, amp: 0.05, freq: 0.9, alpha: 0.05 },
-    { hue: 320, yBase: 0.28, amp: 0.04, freq: 1.5, alpha: 0.04 }
+/* ---- 舞台激光扫射 ---- */
+let laserOffset = 0;
+function drawLaserBeams(energy) {
+  laserOffset += 0.006 + energy.overall * 0.01;
+  const originX = W * 0.5;
+  const originY = H * 0.02;
+  const beams = [
+    { hue: 185, spread: 0.16, speed: 0.6, len: 1.05, alpha: 0.10 },
+    { hue: 300, spread: 0.13, speed: -0.45, len: 1.0, alpha: 0.09 },
+    { hue: 50, spread: 0.1, speed: 0.35, len: 0.95, alpha: 0.08 },
+    { hue: 150, spread: 0.12, speed: -0.55, len: 1.0, alpha: 0.07 }
   ];
-  for (const rb of ribbons) {
-    const yBase = H * rb.yBase;
-    const ampPx = H * rb.amp * (1 + energy.overall * 0.6);
-    const alpha = rb.alpha * (1 + energy.mid * 0.8);
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < beams.length; i++) {
+    const b = beams[i];
+    const centerAng = -Math.PI / 2 + Math.sin(laserOffset * b.speed + i * 1.7) * 0.9;
+    const halfSpread = b.spread * (1 + energy.bass * 0.6);
+    const len = Math.max(W, H) * b.len;
+    const a1 = centerAng - halfSpread;
+    const a2 = centerAng + halfSpread;
+    const x1 = originX + Math.cos(a1) * len;
+    const y1 = originY + Math.sin(a1) * len;
+    const x2 = originX + Math.cos(a2) * len;
+    const y2 = originY + Math.sin(a2) * len;
+    const grad = ctx.createLinearGradient(originX, originY, (x1 + x2) / 2, (y1 + y2) / 2);
+    const alpha = b.alpha * (1 + energy.mid * 0.9);
+    grad.addColorStop(0, `hsla(${b.hue}, 90%, 70%, ${alpha})`);
+    grad.addColorStop(1, `hsla(${b.hue}, 90%, 60%, 0)`);
+    ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.moveTo(0, yBase);
-    for (let x = 0; x <= W; x += 8) {
-      const y = yBase
-        + Math.sin(x * 0.005 * rb.freq + auroraOffset * 3) * ampPx
-        + Math.sin(x * 0.012 * rb.freq + auroraOffset * 5) * ampPx * 0.3;
-      ctx.lineTo(x, y);
-    }
-    ctx.lineTo(W, 0);
-    ctx.lineTo(0, 0);
+    ctx.moveTo(originX, originY);
+    ctx.lineTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.closePath();
-    const g = ctx.createLinearGradient(0, 0, 0, yBase + ampPx * 2);
-    g.addColorStop(0, `hsla(${rb.hue}, 80%, 60%, 0)`);
-    g.addColorStop(0.5, `hsla(${rb.hue}, 75%, 55%, ${alpha})`);
-    g.addColorStop(1, `hsla(${rb.hue}, 70%, 45%, 0)`);
-    ctx.fillStyle = g;
     ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
@@ -1126,9 +1101,9 @@ function frame(now) {
   last = now;
   const energy = getEnergy();
   drawBackground();
-  drawAurora(energy);
-  drawMoon(energy);
-  drawStars(dt, energy);
+  drawLaserBeams(energy);
+  drawSpotlight(energy);
+  drawGlowsticks(dt, energy);
   drawLyricStars(dt, energy);
   drawFireflies(dt);
   drawPetals(dt, energy);
