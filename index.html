@@ -540,6 +540,94 @@ function drawFireflies(dt) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
+/* ---- 舞台桁架 (顶部横梁 + 立柱 + 灯珠) ---- */
+function drawStageRig(energy) {
+  const t = performance.now() / 1000;
+  const trussY = H * 0.05;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(100, 110, 140, 0.35)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(W * 0.04, trussY);
+  ctx.lineTo(W * 0.96, trussY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(W * 0.04, trussY + 14);
+  ctx.lineTo(W * 0.96, trussY + 14);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(100, 110, 140, 0.22)';
+  ctx.lineWidth = 1.5;
+  for (let x = W * 0.04; x < W * 0.96; x += 26) {
+    ctx.beginPath();
+    ctx.moveTo(x, trussY);
+    ctx.lineTo(x + 26, trussY + 14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, trussY + 14);
+    ctx.lineTo(x + 26, trussY);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(100, 110, 140, 0.28)';
+  ctx.lineWidth = 3;
+  [W * 0.05, W * 0.95].forEach(x => {
+    ctx.beginPath();
+    ctx.moveTo(x, trussY);
+    ctx.lineTo(x, H * 0.98);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // 桁架灯珠 (随节奏闪烁跳动)
+  ctx.globalCompositeOperation = 'lighter';
+  const lampCount = 14;
+  for (let i = 0; i < lampCount; i++) {
+    const lx = W * 0.06 + W * 0.88 * (i / (lampCount - 1));
+    const hue = (i * 40 + t * 30) % 360;
+    const flick = 0.4 + 0.6 * Math.abs(Math.sin(t * 3 + i));
+    const alpha = 0.5 + energy.bass * 0.5 * flick;
+    const glow = ctx.createRadialGradient(lx, trussY + 7, 0, lx, trussY + 7, 10);
+    glow.addColorStop(0, `hsla(${hue}, 90%, 80%, ${alpha})`);
+    glow.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(lx, trussY + 7, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `hsla(${hue}, 95%, 90%, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(lx, trussY + 7, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+/* ---- 舞台前沿 (LED 灯带 + 反光地面) ---- */
+function drawStageFront(energy) {
+  const t = performance.now() / 1000;
+  const edgeY = H * 0.985;
+  const floorGrad = ctx.createLinearGradient(0, edgeY - H * 0.15, 0, H);
+  floorGrad.addColorStop(0, 'rgba(20, 15, 35, 0)');
+  floorGrad.addColorStop(1, 'rgba(60, 40, 90, 0.35)');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, edgeY - H * 0.15, W, H * 0.15 + (H - edgeY));
+
+  ctx.globalCompositeOperation = 'lighter';
+  const segCount = 40;
+  for (let i = 0; i < segCount; i++) {
+    const x1 = (W / segCount) * i;
+    const x2 = (W / segCount) * (i + 1);
+    const hue = (i * 12 + t * 60) % 360;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4 + i * 0.4);
+    const alpha = (0.35 + energy.bass * 0.5) * (0.5 + pulse * 0.5);
+    ctx.strokeStyle = `hsla(${hue}, 95%, 65%, ${alpha})`;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x1, edgeY);
+    ctx.lineTo(x2, edgeY);
+    ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
 /* ---- 舞台摇头灯 (动感扫射 + 旋律脉动) ---- */
 function drawSpotlight(energy) {
   const t = performance.now() / 1000;
@@ -1152,6 +1240,7 @@ function frame(now) {
   last = now;
   const energy = getEnergy();
   drawBackground();
+  drawStageRig(energy);
   drawLaserBeams(energy);
   drawSpotlight(energy);
   drawGlowsticks(dt, energy);
@@ -1162,6 +1251,7 @@ function frame(now) {
   drawHearts();
   updateMeteors(dt, energy);
   drawMeteors();
+  drawStageFront(energy);
   updateLyrics(audioEl.currentTime);
   document.documentElement.style.setProperty('--bass', energy.bass.toFixed(3));
   document.documentElement.style.setProperty('--mid', energy.mid.toFixed(3));
