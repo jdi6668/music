@@ -752,7 +752,7 @@ const lyricCanvas = document.createElement('canvas');
 const lyricCtx = lyricCanvas.getContext('2d');
 const PARTICLES_PER_CHAR = 400;
 const MAX_PARTICLE_COUNT = 5000;
-const LYRIC_COLORS = ['#ff6b9d', '#c084fc', '#818cf8', '#38bdf8', '#34d399', '#fbbf24', '#fb923c', '#f472b6', '#a78bfa', '#22d3ee', '#facc15', '#4ade80'];
+const LYRIC_COLORS = GLOWSTICK_COLORS;
 let lyricParticles = [];
 let activeParticleCount = 0;
 
@@ -964,11 +964,18 @@ function drawLyricStars(dt, energy) {
     // 使用预渲染辉光精灵图替代径向渐变
     ctx.globalAlpha = a * 0.85;
     ctx.drawImage(glowCanvas, px - glowR, py - glowR, glowR * 2, glowR * 2);
-    // 核心光点
+    // 核心光点 (荧光棒光珠)
     ctx.fillStyle = p.color;
     ctx.globalAlpha = Math.min(1, a + 0.45);
     const cr = r * 1.1;
-    ctx.fillRect(px - cr, py - cr, cr * 2, cr * 2);
+    ctx.beginPath();
+    ctx.arc(px, py, cr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = Math.min(1, a + 0.55) * 0.7;
+    ctx.beginPath();
+    ctx.arc(px, py, cr * 0.4, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
