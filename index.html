@@ -236,7 +236,7 @@
 <div id="playerWrap">
 <div id="player">
   <div id="disc"></div>
-  <div class="song-title">搬家</div>
+  <div class="song-title">抽离</div>
   <div class="song-sub">夜 深 了 · 好 梦</div>
   <div id="track"><div id="fill"></div></div>
   <div id="times"><span id="curTime">0:00</span><span id="durTime">0:00</span></div>
@@ -540,34 +540,78 @@ function drawFireflies(dt) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-/* ---- 舞台主追光 (缓慢漂移 + 旋律呼吸) ---- */
+/* ---- 舞台摇头灯 (动感扫射 + 旋律脉动) ---- */
 function drawSpotlight(energy) {
   const t = performance.now() / 1000;
-  const driftX = Math.cos(t * 0.03) * W * 0.06;
-  const driftY = Math.sin(t * 0.025) * H * 0.04;
+  const driftX = Math.cos(t * 0.02) * W * 0.05;
   const mx = W * 0.5 + driftX;
-  const my = H * 0.08 + driftY;
-  // 大小随低频呼吸
-  const mr = Math.min(W, H) * (0.045 + energy.bass * 0.02);
-  // 光晕亮度随旋律脉动
-  const haloAlpha = 0.16 + energy.mid * 0.16 + energy.bass * 0.12;
+  const my = H * 0.03;
+
+  // 灯头左右摇摆扫射, 朝下方舞台照射
+  const swing = Math.sin(t * 0.35) * 0.6 + Math.sin(t * 0.9 + 1.3) * 0.18 * energy.overall;
+  const centerAng = Math.PI / 2 + swing;
+  const spread = 0.085 + energy.bass * 0.05;
+  const beamLen = H * 1.08;
+
+  const hue = (200 + Math.sin(t * 0.15) * 70 + energy.mid * 50) % 360;
+  const flicker = 0.7 + 0.3 * Math.sin(t * 6 + energy.bass * 10);
+  const alpha = (0.16 + energy.bass * 0.24) * flicker;
+
+  const a1 = centerAng - spread;
+  const a2 = centerAng + spread;
+  const x1 = mx + Math.cos(a1) * beamLen;
+  const y1 = my + Math.sin(a1) * beamLen;
+  const x2 = mx + Math.cos(a2) * beamLen;
+  const y2 = my + Math.sin(a2) * beamLen;
+
   ctx.globalCompositeOperation = 'lighter';
-  const halo = ctx.createRadialGradient(mx, my, mr * 0.6, mx, my, mr * (6 + energy.overall * 3));
-  halo.addColorStop(0, `rgba(220, 240, 255, ${haloAlpha})`);
-  halo.addColorStop(0.4, `rgba(160, 210, 255, ${haloAlpha * 0.4})`);
-  halo.addColorStop(1, 'rgba(120, 180, 255, 0)');
-  ctx.fillStyle = halo;
+
+  // 光束主体 (体积光锥)
+  const beamGrad = ctx.createLinearGradient(mx, my, (x1 + x2) / 2, (y1 + y2) / 2);
+  beamGrad.addColorStop(0, `hsla(${hue}, 90%, 75%, ${alpha})`);
+  beamGrad.addColorStop(0.6, `hsla(${hue}, 85%, 65%, ${alpha * 0.4})`);
+  beamGrad.addColorStop(1, `hsla(${hue}, 80%, 55%, 0)`);
+  ctx.fillStyle = beamGrad;
   ctx.beginPath();
-  ctx.arc(mx, my, mr * (6 + energy.overall * 3), 0, Math.PI * 2);
+  ctx.moveTo(mx, my);
+  ctx.lineTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.closePath();
   ctx.fill();
-  const g = ctx.createRadialGradient(mx - mr * 0.2, my - mr * 0.2, mr * 0.1, mx, my, mr);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(0.6, '#cfe8ff');
-  g.addColorStop(1, '#8fb8f0');
-  ctx.fillStyle = g;
+
+  // 光锥内的丝状光束 (增强动感与体积感)
+  const rayCount = 6;
+  for (let i = 0; i < rayCount; i++) {
+    const rt = i / (rayCount - 1);
+    const ang = a1 + (a2 - a1) * rt;
+    const rx = mx + Math.cos(ang) * beamLen;
+    const ry = my + Math.sin(ang) * beamLen;
+    const rayA = alpha * (0.5 + 0.5 * Math.sin(t * 3 + i * 1.7)) * 0.5;
+    const rg = ctx.createLinearGradient(mx, my, rx, ry);
+    rg.addColorStop(0, `hsla(${hue}, 95%, 85%, ${rayA})`);
+    rg.addColorStop(1, `hsla(${hue}, 90%, 70%, 0)`);
+    ctx.strokeStyle = rg;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(mx, my);
+    ctx.lineTo(rx, ry);
+    ctx.stroke();
+  }
+
+  // 灯具光源本体
+  const fixtureR = Math.min(W, H) * (0.018 + energy.bass * 0.012);
+  const coreGlow = ctx.createRadialGradient(mx, my, 0, mx, my, fixtureR * 5);
+  coreGlow.addColorStop(0, `hsla(${hue}, 60%, 95%, ${0.7 + energy.bass * 0.3})`);
+  coreGlow.addColorStop(1, `hsla(${hue}, 60%, 90%, 0)`);
+  ctx.fillStyle = coreGlow;
   ctx.beginPath();
-  ctx.arc(mx, my, mr, 0, Math.PI * 2);
+  ctx.arc(mx, my, fixtureR * 5, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(mx, my, fixtureR, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.globalCompositeOperation = 'source-over';
 }
 
