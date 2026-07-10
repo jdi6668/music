@@ -2,4 +2,4 @@
 
 git add .
 git commit -m fix
-# git push
+git push
